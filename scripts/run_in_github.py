@@ -30,7 +30,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger('github-runner')
 
-def run_pipeline(output_dir, min_zoom=4, max_zoom=10, parallel=2, skip_existing=True, force=False):
+def run_pipeline(output_dir, min_zoom=4, max_zoom=8, parallel=2, skip_existing=True, force=False):
     """Run the data processing pipeline with extra error handling for GitHub Actions"""
     try:
         # Print environment information
@@ -84,7 +84,7 @@ if __name__ == "__main__":
                         help="Directory to save output files")
     parser.add_argument("--min-zoom", type=int, default=4,
                         help="Minimum zoom level for MBTiles")
-    parser.add_argument("--max-zoom", type=int, default=10,
+    parser.add_argument("--max-zoom", type=int, default=8,
                         help="Maximum zoom level for MBTiles")
     parser.add_argument("--parallel", type=int, default=2,
                         help="Number of parallel processes to use (0 for sequential)")

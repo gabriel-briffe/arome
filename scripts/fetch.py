@@ -28,11 +28,11 @@ headers = {
 base_url = "https://public-api.meteofrance.fr/public/arome/1.0/wcs/MF-NWP-HIGHRES-AROME-0025-FRANCE-WCS"
 coverage_url = f"{base_url}/GetCoverage"
 
-# Default geographic bounds (covering France)
-DEFAULT_LAT_MIN = "41.55615234375"
-DEFAULT_LAT_MAX = "51.44384765625"
-DEFAULT_LONG_MIN = "-5.93212890625"
-DEFAULT_LONG_MAX = "9.93212890625"
+# Default geographic bounds (custom bounds for the Alpine region)
+DEFAULT_LAT_MIN = "43.45699"
+DEFAULT_LAT_MAX = "47.98810"
+DEFAULT_LONG_MIN = "4.57526"
+DEFAULT_LONG_MAX = "13.96581"
 
 def fetch_vertical_velocity_tiff(
     time_value,

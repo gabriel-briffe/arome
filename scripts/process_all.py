@@ -37,7 +37,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger('process-all')
 
-def process_single_file(hour, pressure, output_dir, min_zoom=4, max_zoom=10, skip_existing=True, force=False):
+def process_single_file(hour, pressure, output_dir, min_zoom=4, max_zoom=8, skip_existing=True, force=False):
     """
     Process a single AROME data file for a specific hour and pressure level
     
@@ -158,7 +158,7 @@ def cleanup_temp_files():
     except Exception as e:
         logger.error(f"Error cleaning up temporary files: {str(e)}")
 
-def process_all(output_dir, min_zoom=4, max_zoom=10, parallel=2, skip_existing=True, force=False):
+def process_all(output_dir, min_zoom=4, max_zoom=8, parallel=2, skip_existing=True, force=False):
     """
     Process all AROME data files for hours 7-21 and pressure levels 500-900
     
@@ -186,10 +186,8 @@ def process_all(output_dir, min_zoom=4, max_zoom=10, parallel=2, skip_existing=T
     os.makedirs(output_dir, exist_ok=True)
     
     # Define ranges
-    # hours = range(7, 22)  # 7 to 21 inclusive
-    hours = range(7, 8)  # 7 to 21 inclusive
-    # pressure_levels = [500, 600, 700, 800, 900]
-    pressure_levels = [500]
+    hours = range(7, 22)  # 7 to 21 inclusive
+    pressure_levels = [500, 600, 700, 800, 900]
     
     # Calculate total files
     total_files = len(hours) * len(pressure_levels)
@@ -259,7 +257,7 @@ if __name__ == "__main__":
                         help="Directory to save output files")
     parser.add_argument("--min-zoom", type=int, default=4,
                         help="Minimum zoom level for MBTiles")
-    parser.add_argument("--max-zoom", type=int, default=10,
+    parser.add_argument("--max-zoom", type=int, default=8,
                         help="Maximum zoom level for MBTiles")
     parser.add_argument("--parallel", type=int, default=2,
                         help="Number of parallel processes to use (0 for sequential)")

@@ -129,7 +129,7 @@ def reproject_array(data, src_bounds, src_width, src_height, dst_bounds, dst_wid
         data.flatten(), 
         dst_points, 
         method='cubic', 
-        fill_value=np.nan
+        fill_value=0.0
     )
     
     # Reshape to target grid size
