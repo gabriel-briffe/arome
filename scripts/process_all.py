@@ -14,7 +14,7 @@ import argparse
 import logging
 import time
 import concurrent.futures
-from datetime import datetime
+from datetime import datetime, timezone
 import glob
 import sys
 
@@ -66,8 +66,8 @@ def process_single_file(hour, pressure, output_dir, min_zoom=4, max_zoom=8, skip
     # Format hour as two digits with leading zero
     hour_str = f"{hour:02d}"
     
-    # Get today's date
-    today = datetime.now().strftime("%Y-%m-%d")
+    # Get today's date in UTC
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
     # Construct time values
     time_value = f"{today}T{hour_str}:00:00Z"

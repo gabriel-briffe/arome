@@ -9,7 +9,9 @@ using the WCS (Web Coverage Service) endpoint.
 import os
 import requests
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
+import numpy as np
+import rasterio
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -69,7 +71,7 @@ def fetch_vertical_velocity_tiff(
     """
     # Set default output filename if not provided
     if output_file is None:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         output_file = f"vertical_velocity_{timestamp}.tiff"
     
     # Build the coverageId from the layer name and reference time
@@ -98,9 +100,31 @@ def fetch_vertical_velocity_tiff(
         
         # Check response status
         if response.status_code == 200:
+            # Save the raw response first
             with open(output_file, "wb") as f:
                 f.write(response.content)
-            logger.info(f"Successfully saved TIFF to {output_file}")
+            
+            # Now open with rasterio and replace nodata with 0
+            try:
+                with rasterio.open(output_file, 'r+') as src:
+                    # Read the data
+                    data = src.read(1)
+                    
+                    # Replace nodata values with 0
+                    if src.nodata is not None:
+                        data = np.where(data == src.nodata, 0, data)
+                    
+                    # Also replace any NaN values with 0
+                    data = np.nan_to_num(data, nan=0.0)
+                    
+                    # Write the modified data back
+                    src.write(data, 1)
+                    
+                logger.info(f"Successfully saved TIFF with nodata values replaced to {output_file}")
+            except Exception as e:
+                logger.warning(f"Could not process nodata values in the TIFF: {e}")
+                # Continue anyway since we already have the raw file
+            
             return True
         else:
             logger.error(f"API Error {response.status_code}: {response.text}")

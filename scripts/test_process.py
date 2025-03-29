@@ -13,8 +13,8 @@ Usage: python test_process.py --pressure 850 --hour 12 --output-dir /path/to/out
 import os
 import argparse
 import logging
-from datetime import datetime
 import time
+from datetime import datetime, timezone
 import glob
 import sys
 
@@ -33,7 +33,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger('process-pipeline')
 
-def process_arome_data(pressure, hour, output_dir, min_zoom=4, max_zoom=10, skip_existing=True):
+def process_arome_data(pressure, hour, output_dir, min_zoom=4, max_zoom=8, skip_existing=True):
     """
     Run the full AROME data processing pipeline
     
@@ -48,7 +48,7 @@ def process_arome_data(pressure, hour, output_dir, min_zoom=4, max_zoom=10, skip
     min_zoom : int
         Minimum zoom level for MBTiles (default: 4)
     max_zoom : int
-        Maximum zoom level for MBTiles (default: 10)
+        Maximum zoom level for MBTiles (default: 8)
     skip_existing : bool
         Whether to skip existing files (default: True)
     
@@ -60,8 +60,8 @@ def process_arome_data(pressure, hour, output_dir, min_zoom=4, max_zoom=10, skip
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
     
-    # Get today's date
-    today = datetime.now().strftime("%Y-%m-%d")
+    # Get today's date in UTC
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
     # Construct time values
     time_value = f"{today}T{hour}:00:00Z"
@@ -172,7 +172,7 @@ if __name__ == "__main__":
                         help="Directory to save output files")
     parser.add_argument("--min-zoom", type=int, default=4,
                         help="Minimum zoom level for MBTiles")
-    parser.add_argument("--max-zoom", type=int, default=10,
+    parser.add_argument("--max-zoom", type=int, default=8,
                         help="Maximum zoom level for MBTiles")
     parser.add_argument("--force", action="store_true",
                         help="Force regeneration of existing files")
