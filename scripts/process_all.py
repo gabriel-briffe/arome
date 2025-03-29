@@ -186,8 +186,10 @@ def process_all(output_dir, min_zoom=4, max_zoom=10, parallel=2, skip_existing=T
     os.makedirs(output_dir, exist_ok=True)
     
     # Define ranges
-    hours = range(7, 22)  # 7 to 21 inclusive
-    pressure_levels = [500, 600, 700, 800, 900]
+    # hours = range(7, 22)  # 7 to 21 inclusive
+    hours = range(7, 8)  # 7 to 21 inclusive
+    # pressure_levels = [500, 600, 700, 800, 900]
+    pressure_levels = [500]
     
     # Calculate total files
     total_files = len(hours) * len(pressure_levels)
