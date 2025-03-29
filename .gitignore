@@ -1,0 +1,40 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+venv/
+env/
+ENV/
+arome/
+
+test_output/
+*.tiff
+*.mbtiles
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+.DS_Store
+*.swp
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Generated test data
+bounds.txt
+README.txt
+viewer.html 
+
+
+plan.txt

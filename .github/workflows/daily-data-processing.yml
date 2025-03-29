@@ -1,0 +1,40 @@
+name: Daily AROME Data Processing
+
+on:
+  schedule:
+    # Run at 1:30 AM UTC daily
+    - cron: '30 1 * * *'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  process-arome-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'  # or the version you're using
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Create output directory
+      run: |
+        mkdir -p output
+        
+    - name: Run AROME data processing
+      run: |
+        python scripts/process_all.py --output-dir output --parallel 2
+      
+    - name: Upload processed data
+      uses: actions/upload-artifact@v3
+      with:
+        name: arome-mbtiles
+        path: output/*.mbtiles
+        retention-days: 3  # Keep files for 3 days 
