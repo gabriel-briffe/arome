@@ -16,6 +16,10 @@ import logging
 from datetime import datetime
 import time
 import glob
+import sys
+
+# Add script directory to path to allow imports to work in GitHub Actions
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Import our clean modules
 from fetch import fetch_vertical_velocity_tiff
