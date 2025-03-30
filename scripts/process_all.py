@@ -14,7 +14,7 @@ import argparse
 import logging
 import time
 import concurrent.futures
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import glob
 import sys
 
@@ -37,7 +37,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger('process-all')
 
-def process_single_file(hour, pressure, output_dir, min_zoom=4, max_zoom=8, skip_existing=True, force=False):
+def process_single_file(hour, pressure, output_dir, min_zoom=4, max_zoom=8, skip_existing=True, force=False, forecast_days=0):
     """
     Process a single AROME data file for a specific hour and pressure level
     
@@ -57,6 +57,8 @@ def process_single_file(hour, pressure, output_dir, min_zoom=4, max_zoom=8, skip
         Whether to skip existing files
     force : bool
         Force regeneration of all files
+    forecast_days : int
+        Number of days ahead to forecast (0 for today, 1 for tomorrow)
     
     Returns:
     --------
@@ -66,16 +68,21 @@ def process_single_file(hour, pressure, output_dir, min_zoom=4, max_zoom=8, skip
     # Format hour as two digits with leading zero
     hour_str = f"{hour:02d}"
     
-    # Get today's date in UTC
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # Get today's date in UTC (source date)
+    source_date = datetime.now(timezone.utc)
+    source_date_str = source_date.strftime("%Y-%m-%d")
+    
+    # Calculate target date (today + forecast_days)
+    target_date = source_date + timedelta(days=forecast_days)
+    target_date_str = target_date.strftime("%Y-%m-%d")
     
     # Construct time values
-    time_value = f"{today}T{hour_str}:00:00Z"
-    ref_time_value = f"{today}T00:00:00Z"
+    time_value = f"{target_date_str}T{hour_str}:00:00Z"
+    ref_time_value = f"{source_date_str}T00:00:00Z"
     
-    # Define file paths
+    # Define file paths - include both source date and target date in filename
     pressure_str = str(pressure)
-    file_base = f"arome_vv_{today}_{hour_str}_{pressure_str}"
+    file_base = f"arome_vv_{source_date_str}_{target_date_str}_{hour_str}_{pressure_str}"
     tiff_path = os.path.join(output_dir, f"{file_base}.tiff")
     warped_tiff_path = os.path.join(output_dir, f"{file_base}_mercator.tiff")
     mbtiles_path = os.path.join(output_dir, f"{file_base}.mbtiles")
@@ -93,7 +100,7 @@ def process_single_file(hour, pressure, output_dir, min_zoom=4, max_zoom=8, skip
             )
         
         if not fetch_success:
-            logger.error(f"Failed to fetch TIFF data for hour {hour_str}:00, pressure {pressure} hPa")
+            logger.error(f"Failed to fetch TIFF data for target date {target_date_str}, hour {hour_str}:00, pressure {pressure} hPa")
             return False
         
         # Step 2: Warp TIFF to Web Mercator
@@ -103,7 +110,7 @@ def process_single_file(hour, pressure, output_dir, min_zoom=4, max_zoom=8, skip
             warp_success = warp_geotiff(tiff_path, warped_tiff_path)
         
         if not warp_success:
-            logger.error(f"Failed to warp TIFF data for hour {hour_str}:00, pressure {pressure} hPa")
+            logger.error(f"Failed to warp TIFF data for target date {target_date_str}, hour {hour_str}:00, pressure {pressure} hPa")
             return False
         
         # Step 3: Convert to MBTiles
@@ -118,14 +125,14 @@ def process_single_file(hour, pressure, output_dir, min_zoom=4, max_zoom=8, skip
                 mbtiles_success = False
         
         if not mbtiles_success:
-            logger.error(f"Failed to create MBTiles for hour {hour_str}:00, pressure {pressure} hPa")
+            logger.error(f"Failed to create MBTiles for target date {target_date_str}, hour {hour_str}:00, pressure {pressure} hPa")
             return False
         
-        logger.info(f"✅ Successfully processed: Hour {hour_str}:00, Pressure {pressure} hPa")
+        logger.info(f"✅ Successfully processed: Target date {target_date_str}, Hour {hour_str}:00, Pressure {pressure} hPa")
         return True
     
     except Exception as e:
-        logger.error(f"Error processing hour {hour_str}:00, pressure {pressure} hPa: {str(e)}")
+        logger.error(f"Error processing target date {target_date_str}, hour {hour_str}:00, pressure {pressure} hPa: {str(e)}")
         return False
 
 def cleanup_temp_files():
@@ -158,7 +165,7 @@ def cleanup_temp_files():
     except Exception as e:
         logger.error(f"Error cleaning up temporary files: {str(e)}")
 
-def process_all(output_dir, min_zoom=4, max_zoom=8, parallel=2, skip_existing=True, force=False):
+def process_all(output_dir, min_zoom=4, max_zoom=8, parallel=2, skip_existing=True, force=False, forecast_days=[0, 1]):
     """
     Process all AROME data files for hours 7-21 and pressure levels 500-900
     
@@ -176,6 +183,8 @@ def process_all(output_dir, min_zoom=4, max_zoom=8, parallel=2, skip_existing=Tr
         Whether to skip existing files
     force : bool
         Force regeneration of all files
+    forecast_days : list
+        Days to forecast (0 for today, 1 for tomorrow)
     
     Returns:
     --------
@@ -186,19 +195,23 @@ def process_all(output_dir, min_zoom=4, max_zoom=8, parallel=2, skip_existing=Tr
     os.makedirs(output_dir, exist_ok=True)
     
     # Define ranges
-    hours = range(5, 22)  # 7 to 21 inclusive
+    hours = range(5, 22)  # 5 to 21 inclusive
     pressure_levels = [500, 600, 700, 800, 900]
     
+    # Create tasks list for each forecast day
+    tasks = []
+    for day in forecast_days:
+        tasks.extend([(hour, pressure, day) for hour in hours for pressure in pressure_levels])
+    
     # Calculate total files
-    total_files = len(hours) * len(pressure_levels)
+    total_files = len(tasks)
     
     logger.info(f"=== Starting batch processing of {total_files} AROME data files ===")
+    logger.info(f"Processing forecast days: {', '.join([str(d) for d in forecast_days])}")
     
     # Start timing
     start_time = time.time()
     
-    # Create tasks list
-    tasks = [(hour, pressure) for hour in hours for pressure in pressure_levels]
     successful_files = 0
     
     # Process files
@@ -214,21 +227,25 @@ def process_all(output_dir, min_zoom=4, max_zoom=8, parallel=2, skip_existing=Tr
                     min_zoom, 
                     max_zoom, 
                     skip_existing,
-                    force
-                ): (hour, pressure) for hour, pressure in tasks
+                    force,
+                    day
+                ): (hour, pressure, day) for hour, pressure, day in tasks
             }
             
             for future in concurrent.futures.as_completed(futures):
-                hour, pressure = futures[future]
+                hour, pressure, day = futures[future]
                 try:
                     if future.result():
                         successful_files += 1
                 except Exception as e:
-                    logger.error(f"Error processing hour {hour:02d}:00, pressure {pressure} hPa: {str(e)}")
+                    source_date = datetime.now(timezone.utc)
+                    target_date = source_date + timedelta(days=day)
+                    target_date_str = target_date.strftime("%Y-%m-%d")
+                    logger.error(f"Error processing target date {target_date_str}, hour {hour:02d}:00, pressure {pressure} hPa: {str(e)}")
     else:
         # Sequential processing
-        for hour, pressure in tasks:
-            if process_single_file(hour, pressure, output_dir, min_zoom, max_zoom, skip_existing, force):
+        for hour, pressure, day in tasks:
+            if process_single_file(hour, pressure, output_dir, min_zoom, max_zoom, skip_existing, force, day):
                 successful_files += 1
     
     # Calculate elapsed time
@@ -265,6 +282,8 @@ if __name__ == "__main__":
                         help="Force regeneration of existing files")
     parser.add_argument("--no-skip", action="store_true",
                         help="Don't skip existing files")
+    parser.add_argument("--forecast-days", type=int, nargs="+", default=[0, 1],
+                        help="Days to forecast (0 for today, 1 for tomorrow, etc.)")
     
     args = parser.parse_args()
     
@@ -275,7 +294,8 @@ if __name__ == "__main__":
         max_zoom=args.max_zoom,
         parallel=args.parallel,
         skip_existing=not args.no_skip,
-        force=args.force
+        force=args.force,
+        forecast_days=args.forecast_days
     )
     
     # Exit with appropriate code

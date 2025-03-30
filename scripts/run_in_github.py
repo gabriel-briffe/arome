@@ -30,7 +30,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger('github-runner')
 
-def run_pipeline(output_dir, min_zoom=4, max_zoom=8, parallel=2, skip_existing=True, force=False):
+def run_pipeline(output_dir, min_zoom=4, max_zoom=8, parallel=2, skip_existing=True, force=False, forecast_days=[0, 1]):
     """Run the data processing pipeline with extra error handling for GitHub Actions"""
     try:
         # Print environment information
@@ -38,6 +38,7 @@ def run_pipeline(output_dir, min_zoom=4, max_zoom=8, parallel=2, skip_existing=T
         logger.info(f"Script directory: {current_dir}")
         logger.info(f"Python path: {sys.path}")
         logger.info(f"Output directory: {output_dir}")
+        logger.info(f"Processing forecast days: {forecast_days}")
         
         # Import process_all here to ensure paths are set up correctly
         from process_all import process_all
@@ -52,7 +53,8 @@ def run_pipeline(output_dir, min_zoom=4, max_zoom=8, parallel=2, skip_existing=T
             max_zoom=max_zoom,
             parallel=parallel,
             skip_existing=skip_existing,
-            force=force
+            force=force,
+            forecast_days=forecast_days
         )
         
         # Report results
@@ -92,6 +94,8 @@ if __name__ == "__main__":
                         help="Force regeneration of existing files")
     parser.add_argument("--no-skip", action="store_true",
                         help="Don't skip existing files")
+    parser.add_argument("--forecast-days", type=int, nargs="+", default=[0, 1],
+                        help="Days to forecast (0 for today, 1 for tomorrow, etc.)")
     
     args = parser.parse_args()
     
@@ -102,7 +106,8 @@ if __name__ == "__main__":
         max_zoom=args.max_zoom,
         parallel=args.parallel,
         skip_existing=not args.no_skip,
-        force=args.force
+        force=args.force,
+        forecast_days=args.forecast_days
     )
     
     # Exit with appropriate code

@@ -54,7 +54,7 @@ jobs:
     - name: Run AROME data processing
       run: |
         cd scripts
-        python run_in_github.py --output-dir $GITHUB_WORKSPACE/output --parallel 2 --min-zoom 4 --max-zoom 8
+        python run_in_github.py --output-dir $GITHUB_WORKSPACE/output --parallel 2 --min-zoom 4 --max-zoom 8 --forecast-days 0 1
       
     - name: Create file list
       if: always()
@@ -77,7 +77,12 @@ jobs:
         body: |
           AROME vertical velocity data for ${{ steps.date.outputs.date }}
           
-          This release contains MBTiles files for AROME vertical velocity data at pressure levels 500-900 hPa and hours 07:00-21:00.
+          This release contains MBTiles files for:
+          - Today's forecast (${{ steps.date.outputs.date }})
+          - Tomorrow's forecast ($(date -d "${{ steps.date.outputs.date }} + 1 day" +'%Y-%m-%d'))
+          
+          Pressure levels: 500-900 hPa
+          Hours: 05:00-21:00 UTC
           
           Files can be opened in QGIS or any other software that supports the MBTiles format.
         files: output/*.mbtiles
