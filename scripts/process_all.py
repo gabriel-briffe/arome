@@ -195,7 +195,7 @@ def process_all(output_dir, min_zoom=4, max_zoom=8, parallel=2, skip_existing=Tr
     os.makedirs(output_dir, exist_ok=True)
     
     # Define ranges
-    hours = range(5, 22)  # 5 to 21 inclusive
+    hours = range(5, 20)  # 5 to 21 inclusive
     pressure_levels = [500, 600, 700, 800, 900]
     
     # Create tasks list for each forecast day

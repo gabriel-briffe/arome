@@ -30,7 +30,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger('github-runner')
 
-def run_pipeline(output_dir, min_zoom=4, max_zoom=8, parallel=2, skip_existing=True, force=False, forecast_days=[0, 1]):
+def run_pipeline(output_dir, min_zoom=4, max_zoom=8, parallel=1, skip_existing=True, force=False, forecast_days=[0, 1]):
     """Run the data processing pipeline with extra error handling for GitHub Actions"""
     try:
         # Print environment information
