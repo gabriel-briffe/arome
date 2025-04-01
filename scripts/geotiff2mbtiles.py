@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def apply_color_gradient(data, min_val=-3, max_val=3, transparent_range=(-1, 1)):
+def apply_color_gradient(data, min_val=-4, max_val=4, transparent_range=(-1, 1)):
     """
     Apply a custom color gradient with transparency:
     - Negative: Dark Blue (0, 0, 139) at -3 to Turquoise (64, 224, 208) at -1
@@ -113,7 +113,7 @@ def geotiff_to_mbtiles(geotiff_path, mbtiles_path, min_zoom=0, max_zoom=14):
             
             # Apply color gradient once
             logger.info("Applying color gradient with transparent range (-1, 1)")
-            colored_data = apply_color_gradient(data, min_val=-3, max_val=3, transparent_range=(-1, 1))
+            colored_data = apply_color_gradient(data, min_val=-4, max_val=4, transparent_range=(-1, 1))
             src_transform = src.transform
             src_crs = src.crs
             logger.info(f"Source CRS: {src_crs}")
