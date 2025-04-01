@@ -6,7 +6,7 @@ This script is designed to run in GitHub Actions and handles path issues
 that might arise when running in that environment.
 
 Usage: 
-  python run_in_github.py --output-dir /path/to/output
+  python run_in_github.py --output-dir /path/to/output --log-level INFO
 """
 
 import os
@@ -20,26 +20,44 @@ from datetime import datetime
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir)
 
-# Configure root logger to INFO level
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler()  # Only log to console in GitHub Actions
-    ]
-)
+def setup_logging(log_level="INFO"):
+    """Configure logging based on the specified log level"""
+    # Convert string to logging level
+    numeric_level = getattr(logging, log_level.upper(), logging.INFO)
+    
+    # Configure root logger
+    logging.basicConfig(
+        level=numeric_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler()  # Only log to console in GitHub Actions
+        ]
+    )
+    
+    # Create a logger for this script
+    logger = logging.getLogger('github-runner')
+    logger.setLevel(numeric_level)
+    
+    # Set other loggers to the same level or DEBUG if root is INFO
+    if numeric_level <= logging.INFO:
+        logging.getLogger('geotiff2mbtiles').setLevel(logging.DEBUG)
+        logging.getLogger('warp').setLevel(logging.DEBUG)
+        logging.getLogger('process-all').setLevel(logging.DEBUG)
+        logging.getLogger('tiff-fetcher').setLevel(numeric_level)  # Keep fetcher at user-specified level
+    else:
+        # If using a higher level like WARNING, apply it to all loggers
+        logging.getLogger('geotiff2mbtiles').setLevel(numeric_level)
+        logging.getLogger('warp').setLevel(numeric_level)
+        logging.getLogger('process-all').setLevel(numeric_level)
+        logging.getLogger('tiff-fetcher').setLevel(numeric_level)
+    
+    return logger
 
-# Create a logger for this script at DEBUG level
-logger = logging.getLogger('github-runner')
-logger.setLevel(logging.DEBUG)
-
-# Set other loggers to DEBUG level to reduce verbosity
-logging.getLogger('geotiff2mbtiles').setLevel(logging.DEBUG)
-logging.getLogger('warp').setLevel(logging.DEBUG)
-logging.getLogger('process-all').setLevel(logging.DEBUG)
-
-def run_pipeline(output_dir, min_zoom=4, max_zoom=8, parallel=1, skip_existing=True, force=False, forecast_days=[0, 1]):
+def run_pipeline(output_dir, min_zoom=4, max_zoom=8, parallel=1, skip_existing=True, force=False, forecast_days=[0, 1], log_level="INFO"):
     """Run the data processing pipeline with extra error handling for GitHub Actions"""
+    # Setup logging
+    logger = setup_logging(log_level)
+    
     try:
         # Print environment information
         logger.debug(f"Current directory: {os.getcwd()}")
@@ -104,6 +122,8 @@ if __name__ == "__main__":
                         help="Don't skip existing files")
     parser.add_argument("--forecast-days", type=int, nargs="+", default=[0, 1],
                         help="Days to forecast (0 for today, 1 for tomorrow, etc.)")
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+                        help="Set the logging level")
     
     args = parser.parse_args()
     
@@ -115,7 +135,8 @@ if __name__ == "__main__":
         parallel=args.parallel,
         skip_existing=not args.no_skip,
         force=args.force,
-        forecast_days=args.forecast_days
+        forecast_days=args.forecast_days,
+        log_level=args.log_level
     )
     
     # Exit with appropriate code

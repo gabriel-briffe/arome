@@ -54,7 +54,7 @@ jobs:
     - name: Run AROME data processing
       run: |
         cd scripts
-        python run_in_github.py --output-dir $GITHUB_WORKSPACE/output --parallel 2 --min-zoom 4 --max-zoom 8 --forecast-days 0 1
+        python run_in_github.py --output-dir $GITHUB_WORKSPACE/output --parallel 1 --min-zoom 4 --max-zoom 8 --forecast-days 0 1 --log-level INFO
       
     - name: Create file list
       if: always()

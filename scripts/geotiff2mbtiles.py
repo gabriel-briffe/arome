@@ -164,7 +164,7 @@ def geotiff_to_mbtiles(geotiff_path, mbtiles_path, min_zoom=0, max_zoom=14):
                 
                 for tile_idx, tile in enumerate(active_tiles[current_zoom]):
                     if tile_idx < 5 or tile_idx % 50 == 0:  # Log for a few tiles and then periodically
-                        logger.info(f"Processing zoom {current_zoom}, tile {tile_idx+1}/{len(active_tiles[current_zoom])}: {tile}")
+                        logger.debug(f"Processing zoom {current_zoom}, tile {tile_idx+1}/{len(active_tiles[current_zoom])}: {tile}")
                     
                     tile_bounds = mercantile.bounds(tile)
                     transform = rasterio.transform.from_bounds(
@@ -187,10 +187,10 @@ def geotiff_to_mbtiles(geotiff_path, mbtiles_path, min_zoom=0, max_zoom=14):
                         
                         # Debug: Force some opacity for testing if no opacity found
                         if tile_idx < 3 and not np.any(tile_data[3] > 0):
-                            logger.info(f"Debug: Original tile has no opacity, checking if source data has values in this region")
+                            logger.debug(f"Debug: Original tile has no opacity, checking if source data has values in this region")
                             # Try to identify if source data has values in this region - convert tile bounds to source CRS
                             src_bounds = mercantile.xy_bounds(tile)
-                            logger.info(f"Tile mercator bounds: {src_bounds}")
+                            logger.debug(f"Tile mercator bounds: {src_bounds}")
                             
                             # Check if these bounds intersect with our data
                             bounds_overlap = (
@@ -199,11 +199,11 @@ def geotiff_to_mbtiles(geotiff_path, mbtiles_path, min_zoom=0, max_zoom=14):
                                 src_bounds.bottom < bounds.top and
                                 src_bounds.top > bounds.bottom
                             )
-                            logger.info(f"Bounds overlap: {bounds_overlap}")
+                            logger.debug(f"Bounds overlap: {bounds_overlap}")
                             
                             if bounds_overlap:
                                 # Force some opacity for the first few debugging tiles
-                                logger.info(f"Debug: Forcing opacity in center of tile {tile_idx} for testing")
+                                logger.debug(f"Debug: Forcing opacity in center of tile {tile_idx} for testing")
                                 tile_data[0, 128, 128] = 255  # Red
                                 tile_data[3, 128, 128] = 255  # Alpha (opaque)
                     except Exception as e:
@@ -213,7 +213,7 @@ def geotiff_to_mbtiles(geotiff_path, mbtiles_path, min_zoom=0, max_zoom=14):
                     has_opaque = np.any(tile_data[3] > 0)
                     if tile_idx < 5:  # Log detailed info for first few tiles
                         opaque_count = np.count_nonzero(tile_data[3] > 0)
-                        logger.info(f"Tile {tile_idx} opacity check: {opaque_count} opaque pixels ({opaque_count/(256*256)*100:.2f}%), has_opaque={has_opaque}")
+                        logger.debug(f"Tile {tile_idx} opacity check: {opaque_count} opaque pixels ({opaque_count/(256*256)*100:.2f}%), has_opaque={has_opaque}")
                     
                     if has_opaque:  # Alpha channel
                         # Convert to image
