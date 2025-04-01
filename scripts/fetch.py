@@ -12,6 +12,8 @@ import logging
 from datetime import datetime, timezone
 import numpy as np
 import rasterio
+import time
+import random
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -44,7 +46,10 @@ def fetch_vertical_velocity_tiff(
     lat_max=DEFAULT_LAT_MAX,
     long_min=DEFAULT_LONG_MIN,
     long_max=DEFAULT_LONG_MAX,
-    output_file=None
+    output_file=None,
+    max_retries=6,
+    initial_backoff=2,
+    max_backoff=120
 ):
     """
     Fetch vertical velocity data from the AROME API in TIFF format
@@ -63,6 +68,12 @@ def fetch_vertical_velocity_tiff(
         Longitude bounds
     output_file : str, optional
         The output file name. If None, a default name will be generated.
+    max_retries : int
+        Maximum number of retry attempts for rate-limited requests
+    initial_backoff : int
+        Initial backoff time in seconds
+    max_backoff : int
+        Maximum backoff time in seconds
     
     Returns:
     --------
@@ -93,45 +104,93 @@ def fetch_vertical_velocity_tiff(
     
     logger.info(f"Requesting data from: {url}")
     
-    # Make the request
-    try:
-        logger.info(f"Fetching data for {time_value} at {pressure_value}hPa")
-        response = requests.get(url, headers=headers, timeout=60)
-        
-        # Check response status
-        if response.status_code == 200:
-            with open(output_file, "wb") as f:
-                f.write(response.content)
-            logger.info(f"Successfully saved TIFF to {output_file}")
+    # Implement exponential backoff retry
+    retry_count = 0
+    backoff = initial_backoff
+    
+    while retry_count <= max_retries:
+        try:
+            logger.info(f"Fetching data for {time_value} at {pressure_value}hPa")
+            response = requests.get(url, headers=headers, timeout=60)
             
-            # Now open with rasterio and replace nodata with 0
-            try:
-                with rasterio.open(output_file, 'r+') as src:
-                    # Read the data
-                    data = src.read(1)
-                    
-                    # Replace nodata values with 0
-                    if src.nodata is not None:
-                        data = np.where(data == src.nodata, 0, data)
-                    
-                    # Also replace any NaN values with 0
-                    data = np.nan_to_num(data, nan=0.0)
-                    
-                    # Write the modified data back
-                    src.write(data, 1)
-                    
-                logger.debug(f"Replaced nodata values with 0 in {output_file}")
-            except Exception as e:
-                logger.warning(f"Could not process nodata values in the TIFF: {e}")
-                # Continue anyway since we already have the raw file
+            # Handle rate limiting (HTTP 429)
+            if response.status_code == 429:
+                retry_count += 1
+                if retry_count > max_retries:
+                    logger.error(f"Rate limit exceeded after {max_retries} retries. Giving up.")
+                    return False
+                
+                # Get retry-after header if available, otherwise use exponential backoff
+                retry_after = response.headers.get('Retry-After')
+                if retry_after and retry_after.isdigit():
+                    wait_time = int(retry_after)
+                else:
+                    # Add jitter to avoid thundering herd
+                    jitter = random.uniform(0, 0.1 * backoff)
+                    wait_time = backoff + jitter
+                    # Double the backoff for next time, but don't exceed max
+                    backoff = min(backoff * 2, max_backoff)
+                
+                logger.warning(f"Rate limited (429). Retrying in {wait_time:.1f} seconds (attempt {retry_count}/{max_retries})")
+                time.sleep(wait_time)
+                continue
             
-            return True
-        else:
-            logger.error(f"API Error {response.status_code}: {response.text}")
-            return False
-    except Exception as e:
-        logger.error(f"Request failed: {e}")
-        return False
+            # Check response status
+            if response.status_code == 200:
+                with open(output_file, "wb") as f:
+                    f.write(response.content)
+                logger.info(f"Successfully saved TIFF to {output_file}")
+                
+                # Now open with rasterio and replace nodata with 0
+                try:
+                    with rasterio.open(output_file, 'r+') as src:
+                        # Read the data
+                        data = src.read(1)
+                        
+                        # Replace nodata values with 0
+                        if src.nodata is not None:
+                            data = np.where(data == src.nodata, 0, data)
+                        
+                        # Also replace any NaN values with 0
+                        data = np.nan_to_num(data, nan=0.0)
+                        
+                        # Write the modified data back
+                        src.write(data, 1)
+                        
+                    logger.debug(f"Replaced nodata values with 0 in {output_file}")
+                except Exception as e:
+                    logger.warning(f"Could not process nodata values in the TIFF: {e}")
+                    # Continue anyway since we already have the raw file
+                
+                return True
+            else:
+                logger.error(f"API Error {response.status_code}: {response.text}")
+                # Don't retry for non-429 errors
+                return False
+        except requests.exceptions.RequestException as e:
+            # For connection errors, retry with backoff if it might be a temporary issue
+            if isinstance(e, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)):
+                retry_count += 1
+                if retry_count > max_retries:
+                    logger.error(f"Request failed after {max_retries} retries: {e}")
+                    return False
+                
+                # Add jitter to avoid thundering herd
+                jitter = random.uniform(0, 0.1 * backoff)
+                wait_time = backoff + jitter
+                # Double the backoff for next time, but don't exceed max
+                backoff = min(backoff * 2, max_backoff)
+                
+                logger.warning(f"Connection error. Retrying in {wait_time:.1f} seconds (attempt {retry_count}/{max_retries}): {e}")
+                time.sleep(wait_time)
+                continue
+            else:
+                logger.error(f"Request failed: {e}")
+                return False
+    
+    # If we get here, we've exhausted retries
+    logger.error(f"Failed to fetch data after {max_retries} retries.")
+    return False
 
 if __name__ == "__main__":
     import argparse
