@@ -38,18 +38,11 @@ def setup_logging(log_level="INFO"):
     logger = logging.getLogger('github-runner')
     logger.setLevel(numeric_level)
     
-    # Set other loggers to the same level or DEBUG if root is INFO
-    if numeric_level <= logging.INFO:
-        logging.getLogger('geotiff2mbtiles').setLevel(logging.DEBUG)
-        logging.getLogger('warp').setLevel(logging.DEBUG)
-        logging.getLogger('process-all').setLevel(logging.DEBUG)
-        logging.getLogger('tiff-fetcher').setLevel(numeric_level)  # Keep fetcher at user-specified level
-    else:
-        # If using a higher level like WARNING, apply it to all loggers
-        logging.getLogger('geotiff2mbtiles').setLevel(numeric_level)
-        logging.getLogger('warp').setLevel(numeric_level)
-        logging.getLogger('process-all').setLevel(numeric_level)
-        logging.getLogger('tiff-fetcher').setLevel(numeric_level)
+    # Set all other loggers to the same level as specified by the user
+    logging.getLogger('geotiff2mbtiles').setLevel(numeric_level)
+    logging.getLogger('warp').setLevel(numeric_level)
+    logging.getLogger('process-all').setLevel(numeric_level)
+    logging.getLogger('tiff-fetcher').setLevel(numeric_level)
     
     return logger
 
