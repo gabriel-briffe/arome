@@ -20,7 +20,7 @@ from datetime import datetime
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir)
 
-# Set up logging
+# Configure root logger to INFO level
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -28,15 +28,23 @@ logging.basicConfig(
         logging.StreamHandler()  # Only log to console in GitHub Actions
     ]
 )
+
+# Create a logger for this script at DEBUG level
 logger = logging.getLogger('github-runner')
+logger.setLevel(logging.DEBUG)
+
+# Set other loggers to DEBUG level to reduce verbosity
+logging.getLogger('geotiff2mbtiles').setLevel(logging.DEBUG)
+logging.getLogger('warp').setLevel(logging.DEBUG)
+logging.getLogger('process-all').setLevel(logging.DEBUG)
 
 def run_pipeline(output_dir, min_zoom=4, max_zoom=8, parallel=1, skip_existing=True, force=False, forecast_days=[0, 1]):
     """Run the data processing pipeline with extra error handling for GitHub Actions"""
     try:
         # Print environment information
-        logger.info(f"Current directory: {os.getcwd()}")
-        logger.info(f"Script directory: {current_dir}")
-        logger.info(f"Python path: {sys.path}")
+        logger.debug(f"Current directory: {os.getcwd()}")
+        logger.debug(f"Script directory: {current_dir}")
+        logger.debug(f"Python path: {sys.path}")
         logger.info(f"Output directory: {output_dir}")
         logger.info(f"Processing forecast days: {forecast_days}")
         

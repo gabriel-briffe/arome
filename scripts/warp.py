@@ -24,7 +24,7 @@ from scipy.interpolate import griddata
 
 # Set up logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger('warp')
@@ -121,7 +121,7 @@ def reproject_array(data, src_bounds, src_width, src_height, dst_bounds, dst_wid
     src_points = np.column_stack((src_lats.flatten(), src_lons.flatten()))
     dst_points = np.column_stack((dst_lats.flatten(), dst_lons.flatten()))
     
-    logger.info("Performing interpolation...")
+    logger.debug("Performing interpolation...")
     
     # Interpolate the data values using cubic interpolation for higher quality
     dst_data = griddata(
@@ -214,7 +214,7 @@ def warp_geotiff(input_file, output_file, resolution=None):
             })
             
             # Write the output file
-            logger.info(f"Writing output file: {output_file}")
+            logger.debug(f"Writing output file: {output_file}")
             with rasterio.open(output_file, 'w', **dst_profile) as dst:
                 dst.write(dst_data, 1)
             

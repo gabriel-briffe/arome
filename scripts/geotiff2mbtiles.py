@@ -30,8 +30,8 @@ def apply_color_gradient(data, min_val=-4, max_val=4, transparent_range=(-1, 1))
     data_mean = np.mean(data)
     data_std = np.std(data)
     data_nonzero = np.count_nonzero(data)
-    logger.info(f"Data statistics: Min={data_min:.4f}, Max={data_max:.4f}, Mean={data_mean:.4f}, StdDev={data_std:.4f}")
-    logger.info(f"Non-zero values: {data_nonzero} / {data.size} ({data_nonzero/data.size*100:.2f}%)")
+    logger.debug(f"Data statistics: Min={data_min:.4f}, Max={data_max:.4f}, Mean={data_mean:.4f}, StdDev={data_std:.4f}")
+    logger.debug(f"Non-zero values: {data_nonzero} / {data.size} ({data_nonzero/data.size*100:.2f}%)")
     
     # Handle NaN values
     data_clean = np.nan_to_num(data, nan=0.0)
@@ -41,17 +41,17 @@ def apply_color_gradient(data, min_val=-4, max_val=4, transparent_range=(-1, 1))
     
     # Define transparency mask: opaque outside transparent_range
     transparent_min, transparent_max = transparent_range
-    logger.info(f"Using transparent range: [{transparent_min}, {transparent_max}]")
+    logger.debug(f"Using transparent range: [{transparent_min}, {transparent_max}]")
     
     opaque_mask = (data_clean < transparent_min) | (data_clean > transparent_max)
     opaque_count = np.count_nonzero(opaque_mask)
-    logger.info(f"Opaque pixels: {opaque_count} / {data.size} ({opaque_count/data.size*100:.2f}%)")
+    logger.debug(f"Opaque pixels: {opaque_count} / {data.size} ({opaque_count/data.size*100:.2f}%)")
     
     if np.any(opaque_mask):
         # Negative range: min_val (dark blue) to transparent_min (turquoise)
         neg_mask = (data_clean < transparent_min) & (data_clean >= min_val)
         neg_count = np.count_nonzero(neg_mask)
-        logger.info(f"Negative values outside transparent range: {neg_count} / {data.size} ({neg_count/data.size*100:.2f}%)")
+        logger.debug(f"Negative values outside transparent range: {neg_count} / {data.size} ({neg_count/data.size*100:.2f}%)")
         
         if np.any(neg_mask):
             neg_normalized = (data_clean - min_val) / (transparent_min - min_val)  # 0 at min_val, 1 at transparent_min
@@ -64,7 +64,7 @@ def apply_color_gradient(data, min_val=-4, max_val=4, transparent_range=(-1, 1))
         # Positive range: transparent_max (yellow) to max_val (dark red)
         pos_mask = (data_clean > transparent_max) & (data_clean <= max_val)
         pos_count = np.count_nonzero(pos_mask)
-        logger.info(f"Positive values outside transparent range: {pos_count} / {data.size} ({pos_count/data.size*100:.2f}%)")
+        logger.debug(f"Positive values outside transparent range: {pos_count} / {data.size} ({pos_count/data.size*100:.2f}%)")
         
         if np.any(pos_mask):
             pos_normalized = (data_clean - transparent_max) / (max_val - transparent_max)  # 0 at transparent_max, 1 at max_val
@@ -78,7 +78,7 @@ def apply_color_gradient(data, min_val=-4, max_val=4, transparent_range=(-1, 1))
         extreme_neg_mask = data_clean < min_val
         extreme_neg_count = np.count_nonzero(extreme_neg_mask)
         if extreme_neg_count > 0:
-            logger.info(f"Extreme negative values (< {min_val}): {extreme_neg_count}")
+            logger.debug(f"Extreme negative values (< {min_val}): {extreme_neg_count}")
             rgba[0, extreme_neg_mask] = 0    # Dark Blue
             rgba[1, extreme_neg_mask] = 0
             rgba[2, extreme_neg_mask] = 139
@@ -87,7 +87,7 @@ def apply_color_gradient(data, min_val=-4, max_val=4, transparent_range=(-1, 1))
         extreme_pos_mask = data_clean > max_val
         extreme_pos_count = np.count_nonzero(extreme_pos_mask)
         if extreme_pos_count > 0:
-            logger.info(f"Extreme positive values (> {max_val}): {extreme_pos_count}")
+            logger.debug(f"Extreme positive values (> {max_val}): {extreme_pos_count}")
             rgba[0, extreme_pos_mask] = 139  # Dark Red
             rgba[1, extreme_pos_mask] = 0
             rgba[2, extreme_pos_mask] = 0
@@ -95,7 +95,7 @@ def apply_color_gradient(data, min_val=-4, max_val=4, transparent_range=(-1, 1))
         
         # Check if any pixels were made opaque
         final_opaque = np.count_nonzero(rgba[3] > 0)
-        logger.info(f"Final opaque pixels in RGBA: {final_opaque} / {data.size} ({final_opaque/data.size*100:.2f}%)")
+        logger.debug(f"Final opaque pixels in RGBA: {final_opaque} / {data.size} ({final_opaque/data.size*100:.2f}%)")
     else:
         logger.warning("No opaque pixels found; all data falls within transparent range.")
     
@@ -107,16 +107,16 @@ def geotiff_to_mbtiles(geotiff_path, mbtiles_path, min_zoom=0, max_zoom=14):
     try:
         with rasterio.open(geotiff_path) as src:
             bounds = src.bounds
-            logger.info(f"GeoTIFF bounds: {bounds}")
+            logger.debug(f"GeoTIFF bounds: {bounds}")
             data = src.read(1)  # Read first band (vertical speed)
-            logger.info(f"GeoTIFF shape: {data.shape}")
+            logger.debug(f"GeoTIFF shape: {data.shape}")
             
             # Apply color gradient once
-            logger.info("Applying color gradient with transparent range (-1, 1)")
+            logger.debug("Applying color gradient with transparent range (-1, 1)")
             colored_data = apply_color_gradient(data, min_val=-4, max_val=4, transparent_range=(-1, 1))
             src_transform = src.transform
             src_crs = src.crs
-            logger.info(f"Source CRS: {src_crs}")
+            logger.debug(f"Source CRS: {src_crs}")
             
             # Create MBTiles database
             conn = sqlite3.connect(mbtiles_path)
@@ -151,11 +151,11 @@ def geotiff_to_mbtiles(geotiff_path, mbtiles_path, min_zoom=0, max_zoom=14):
             west, south = transformer.transform(bounds.left, bounds.bottom)
             east, north = transformer.transform(bounds.right, bounds.top)
             
-            logger.info(f"WGS84 bounds: west={west}, south={south}, east={east}, north={north}")
+            logger.debug(f"WGS84 bounds: west={west}, south={south}, east={east}, north={north}")
             
             # Now get tiles using WGS84 coordinates
             tiles_at_zoom = list(mercantile.tiles(west, south, east, north, zooms=[current_zoom]))
-            logger.info(f"Zoom {current_zoom}: Processing {len(tiles_at_zoom)} tiles")
+            logger.debug(f"Zoom {current_zoom}: Processing {len(tiles_at_zoom)} tiles")
             active_tiles[current_zoom] = tiles_at_zoom
             
             while current_zoom <= max_zoom:
@@ -242,15 +242,15 @@ def geotiff_to_mbtiles(geotiff_path, mbtiles_path, min_zoom=0, max_zoom=14):
                         skipped_count += 1
                 
                 # Log each zoom level
-                logger.info(f"Zoom {current_zoom}: Processed {non_empty_count} non-empty tiles, skipped {skipped_count}")
+                logger.debug(f"Zoom {current_zoom}: Processed {non_empty_count} non-empty tiles, skipped {skipped_count}")
                 
                 # Move to next zoom level
                 current_zoom += 1
                 if current_zoom <= max_zoom and next_level_tiles:
                     active_tiles[current_zoom] = next_level_tiles
-                    logger.info(f"Zoom {current_zoom}: Will process {len(next_level_tiles)} tiles")
+                    logger.debug(f"Zoom {current_zoom}: Will process {len(next_level_tiles)} tiles")
                 else:
-                    logger.info(f"No more tiles to process at higher zoom levels, stopping at zoom {current_zoom-1}")
+                    logger.debug(f"No more tiles to process at higher zoom levels, stopping at zoom {current_zoom-1}")
                     break
             
             conn.commit()

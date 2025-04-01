@@ -161,7 +161,7 @@ def cleanup_temp_files():
         for info_file in info_files:
             if os.path.exists(info_file):
                 os.remove(info_file)
-                logger.info(f"Removed information file: {info_file}")
+                logger.debug(f"Removed information file: {info_file}")
     except Exception as e:
         logger.error(f"Error cleaning up temporary files: {str(e)}")
 
@@ -259,7 +259,7 @@ def process_all(output_dir, min_zoom=4, max_zoom=8, parallel=2, skip_existing=Tr
     logger.info(f"Total files: {total_files}")
     logger.info(f"Successfully processed: {successful_files}")
     logger.info(f"Failed: {total_files - successful_files}")
-    logger.info(f"Total elapsed time: {elapsed_time:.2f} seconds")
+    logger.debug(f"Total elapsed time: {elapsed_time:.2f} seconds")
     
     return total_files, successful_files
 

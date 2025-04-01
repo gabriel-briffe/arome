@@ -100,9 +100,9 @@ def fetch_vertical_velocity_tiff(
         
         # Check response status
         if response.status_code == 200:
-            # Save the raw response first
             with open(output_file, "wb") as f:
                 f.write(response.content)
+            logger.info(f"Successfully saved TIFF to {output_file}")
             
             # Now open with rasterio and replace nodata with 0
             try:
@@ -120,7 +120,7 @@ def fetch_vertical_velocity_tiff(
                     # Write the modified data back
                     src.write(data, 1)
                     
-                logger.info(f"Successfully saved TIFF with nodata values replaced to {output_file}")
+                logger.debug(f"Replaced nodata values with 0 in {output_file}")
             except Exception as e:
                 logger.warning(f"Could not process nodata values in the TIFF: {e}")
                 # Continue anyway since we already have the raw file
