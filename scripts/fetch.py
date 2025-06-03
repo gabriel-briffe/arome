@@ -32,11 +32,12 @@ headers = {
 base_url = "https://public-api.meteofrance.fr/public/arome/1.0/wcs/MF-NWP-HIGHRES-AROME-0025-FRANCE-WCS"
 coverage_url = f"{base_url}/GetCoverage"
 
-# Default geographic bounds (custom bounds for the Alpine region)
-DEFAULT_LAT_MIN = "43.45699"
-DEFAULT_LAT_MAX = "47.98810"
-DEFAULT_LONG_MIN = "4.57526"
-DEFAULT_LONG_MAX = "13.96581"
+# Default geographic bounds (full AROME France domain extent)
+# Covers France and surrounding areas including parts of neighboring countries
+DEFAULT_LAT_MIN = "37.5"    # Southern boundary of AROME domain
+DEFAULT_LAT_MAX = "55.4"    # Northern boundary of AROME domain
+DEFAULT_LONG_MIN = "-12.0"  # Western boundary of AROME domain (12°W)
+DEFAULT_LONG_MAX = "16.0"   # Eastern boundary of AROME domain (16°E)
 
 def fetch_vertical_velocity_tiff(
     time_value,
