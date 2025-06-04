@@ -87,6 +87,16 @@ def process_single_file(hour, pressure, output_dir, min_zoom=4, max_zoom=8, skip
     warped_tiff_path = os.path.join(output_dir, f"{file_base}_mercator.tiff")
     mbtiles_path = os.path.join(output_dir, f"{file_base}.mbtiles")
     
+    def cleanup_intermediate_file(file_path, description):
+        """Helper function to safely delete intermediate files"""
+        try:
+            if os.path.exists(file_path):
+                file_size = os.path.getsize(file_path)
+                os.remove(file_path)
+                logger.debug(f"🗑️  Cleaned up {description}: {file_path} ({file_size / 1024 / 1024:.1f} MB freed)")
+        except Exception as e:
+            logger.warning(f"Failed to cleanup {description} {file_path}: {e}")
+    
     try:
         # Step 1: Fetch TIFF
         if os.path.exists(tiff_path) and os.path.getsize(tiff_path) > 1000000 and skip_existing and not force:
@@ -101,6 +111,7 @@ def process_single_file(hour, pressure, output_dir, min_zoom=4, max_zoom=8, skip
         
         if not fetch_success:
             logger.error(f"Failed to fetch TIFF data for target date {target_date_str}, hour {hour_str}:00, pressure {pressure} hPa")
+            cleanup_intermediate_file(tiff_path, "failed TIFF")
             return False
         
         # Step 2: Warp TIFF to Web Mercator
@@ -111,7 +122,12 @@ def process_single_file(hour, pressure, output_dir, min_zoom=4, max_zoom=8, skip
         
         if not warp_success:
             logger.error(f"Failed to warp TIFF data for target date {target_date_str}, hour {hour_str}:00, pressure {pressure} hPa")
+            cleanup_intermediate_file(tiff_path, "original TIFF")
+            cleanup_intermediate_file(warped_tiff_path, "failed warped TIFF")
             return False
+        
+        # Clean up original TIFF after successful warping (we only need the warped version)
+        cleanup_intermediate_file(tiff_path, "original TIFF")
         
         # Step 3: Convert to MBTiles
         if os.path.exists(mbtiles_path) and os.path.getsize(mbtiles_path) > 1000000 and skip_existing and not force:
@@ -126,13 +142,21 @@ def process_single_file(hour, pressure, output_dir, min_zoom=4, max_zoom=8, skip
         
         if not mbtiles_success:
             logger.error(f"Failed to create MBTiles for target date {target_date_str}, hour {hour_str}:00, pressure {pressure} hPa")
+            cleanup_intermediate_file(warped_tiff_path, "warped TIFF")
+            cleanup_intermediate_file(mbtiles_path, "failed MBTiles")
             return False
+        
+        # Clean up warped TIFF after successful MBTiles creation (we only need the final MBTiles)
+        cleanup_intermediate_file(warped_tiff_path, "warped TIFF")
         
         logger.info(f"✅ Successfully processed: Target date {target_date_str}, Hour {hour_str}:00, Pressure {pressure} hPa")
         return True
     
     except Exception as e:
         logger.error(f"Error processing target date {target_date_str}, hour {hour_str}:00, pressure {pressure} hPa: {str(e)}")
+        # Clean up any intermediate files on error
+        cleanup_intermediate_file(tiff_path, "original TIFF")
+        cleanup_intermediate_file(warped_tiff_path, "warped TIFF")
         return False
 
 def cleanup_temp_files():
