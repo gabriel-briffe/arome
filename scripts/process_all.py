@@ -93,7 +93,7 @@ def process_single_file(hour, pressure, output_dir, min_zoom=4, max_zoom=8, skip
             if os.path.exists(file_path):
                 file_size = os.path.getsize(file_path)
                 os.remove(file_path)
-                logger.debug(f"🗑️  Cleaned up {description}: {file_path} ({file_size / 1024 / 1024:.1f} MB freed)")
+                logger.info(f"🗑️  Cleaned up {description}: {file_path} ({file_size / 1024 / 1024:.1f} MB freed)")
         except Exception as e:
             logger.warning(f"Failed to cleanup {description} {file_path}: {e}")
     
