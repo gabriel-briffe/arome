@@ -46,7 +46,7 @@ def setup_logging(log_level="INFO"):
     
     return logger
 
-def run_pipeline(output_dir, min_zoom=4, max_zoom=8, parallel=1, skip_existing=True, force=False, forecast_days=[0, 1], log_level="INFO"):
+def run_pipeline(output_dir, min_zoom=4, max_zoom=8, parallel=1, skip_existing=True, force=False, forecast_days=[0, 1], log_level="INFO", release_tag=None):
     """Run the data processing pipeline with extra error handling for GitHub Actions"""
     # Setup logging
     logger = setup_logging(log_level)
@@ -58,6 +58,8 @@ def run_pipeline(output_dir, min_zoom=4, max_zoom=8, parallel=1, skip_existing=T
         logger.debug(f"Python path: {sys.path}")
         logger.info(f"Output directory: {output_dir}")
         logger.info(f"Processing forecast days: {forecast_days}")
+        if release_tag:
+            logger.info(f"GitHub release tag: {release_tag}")
         
         # Import process_all here to ensure paths are set up correctly
         from process_all import process_all
@@ -73,7 +75,8 @@ def run_pipeline(output_dir, min_zoom=4, max_zoom=8, parallel=1, skip_existing=T
             parallel=parallel,
             skip_existing=skip_existing,
             force=force,
-            forecast_days=forecast_days
+            forecast_days=forecast_days,
+            release_tag=release_tag
         )
         
         # Report results
@@ -117,6 +120,8 @@ if __name__ == "__main__":
                         help="Days to forecast (0 for today, 1 for tomorrow, etc.)")
     parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
                         help="Set the logging level")
+    parser.add_argument("--release-tag", type=str,
+                        help="GitHub release tag to create and upload files to")
     
     args = parser.parse_args()
     
@@ -129,7 +134,8 @@ if __name__ == "__main__":
         skip_existing=not args.no_skip,
         force=args.force,
         forecast_days=args.forecast_days,
-        log_level=args.log_level
+        log_level=args.log_level,
+        release_tag=args.release_tag
     )
     
     # Exit with appropriate code
