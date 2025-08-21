@@ -56,24 +56,21 @@ jobs:
       id: date
       run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
     
-    # Clean up releases older than 5 days
+    # Clean up old releases - keep only the last 3
     - name: Cleanup old releases
       run: |
-        echo "🗑️ Cleaning up releases older than 5 days..."
+        echo "🗑️ Cleaning up old releases (keeping only the last 3)..."
         
-        # Calculate cutoff timestamp (5 days ago as epoch seconds)
-        CUTOFF_EPOCH=$(date -d '5 days ago' +%s)
-        echo "Cutoff date: $(date -d '5 days ago' --iso-8601) (epoch: $CUTOFF_EPOCH)"
-        
-        # Get list of releases older than 5 days and delete them
-        OLD_RELEASES=$(gh release list --limit 100 --json tagName,createdAt \
-          | jq -r --arg cutoff "$CUTOFF_EPOCH" \
-          '.[] | select((.createdAt | fromdateiso8601) < ($cutoff | tonumber)) | .tagName')
+        # Get all releases, skip the first 3 (most recent), get the rest to delete
+        OLD_RELEASES=$(gh release list --limit 100 --json tagName \
+          | jq -r '.[3:] | .[] | .tagName')
         
         if [ -z "$OLD_RELEASES" ]; then
-          echo "✅ No old releases to clean up"
+          echo "✅ No old releases to clean up (less than 4 releases exist)"
         else
-          echo "Found old releases to delete:"
+          # Count releases to delete
+          RELEASE_COUNT=$(echo "$OLD_RELEASES" | wc -l)
+          echo "Found $RELEASE_COUNT old releases to delete (keeping 3 most recent):"
           echo "$OLD_RELEASES"
           
           # Delete each old release
