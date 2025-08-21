@@ -55,6 +55,39 @@ jobs:
     - name: Get current date
       id: date
       run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+    
+    # Clean up releases older than 5 days
+    - name: Cleanup old releases
+      run: |
+        echo "🗑️ Cleaning up releases older than 5 days..."
+        
+        # Calculate cutoff date (5 days ago)
+        CUTOFF_DATE=$(date -d '5 days ago' --iso-8601)
+        echo "Cutoff date: $CUTOFF_DATE"
+        
+        # Get list of releases older than 5 days and delete them
+        OLD_RELEASES=$(gh release list --limit 100 --json tagName,createdAt \
+          | jq -r --arg cutoff "$CUTOFF_DATE" \
+          '.[] | select(.createdAt < $cutoff) | .tagName')
+        
+        if [ -z "$OLD_RELEASES" ]; then
+          echo "✅ No old releases to clean up"
+        else
+          echo "Found old releases to delete:"
+          echo "$OLD_RELEASES"
+          
+          # Delete each old release
+          echo "$OLD_RELEASES" | while read -r tag; do
+            if [ -n "$tag" ]; then
+              echo "🗑️ Deleting release: $tag"
+              gh release delete "$tag" --yes || echo "⚠️ Failed to delete $tag"
+            fi
+          done
+          
+          echo "✅ Cleanup completed"
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Run AROME data processing with incremental release
       run: |
