@@ -125,17 +125,6 @@ def geotiff_to_mbtiles(geotiff_path, mbtiles_path, min_zoom=0, max_zoom=14):
             cursor.execute("CREATE TABLE IF NOT EXISTS tiles (zoom_level INTEGER, tile_column INTEGER, tile_row INTEGER, tile_data BLOB)")
             cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS tile_index ON tiles (zoom_level, tile_column, tile_row)")
             
-            # Set metadata
-            metadata = [
-                ("name", os.path.basename(geotiff_path)),
-                ("format", "png"),
-                ("bounds", f"{bounds.left},{bounds.bottom},{bounds.right},{bounds.top}"),
-                ("minzoom", str(min_zoom)),
-                ("maxzoom", str(max_zoom)),
-                ("type", "baselayer")
-            ]
-            cursor.executemany("INSERT OR REPLACE INTO metadata VALUES (?, ?)", metadata)
-            
             # Generate tiles hierarchically, only for non-empty regions
             tile_count = 0
             skipped_count = 0
@@ -152,6 +141,26 @@ def geotiff_to_mbtiles(geotiff_path, mbtiles_path, min_zoom=0, max_zoom=14):
             east, north = transformer.transform(bounds.right, bounds.top)
             
             logger.debug(f"WGS84 bounds: west={west}, south={south}, east={east}, north={north}")
+            
+            # Calculate center point for metadata
+            center_lon = (west + east) / 2
+            center_lat = (south + north) / 2
+            center_zoom = min_zoom + 2  # Start a couple zooms in from minimum
+            
+            # Set metadata with correct WGS84 bounds and additional fields
+            metadata = [
+                ("name", os.path.basename(geotiff_path)),
+                ("format", "png"),
+                ("bounds", f"{west},{south},{east},{north}"),  # WGS84 bounds
+                ("center", f"{center_lon},{center_lat},{center_zoom}"),
+                ("minzoom", str(min_zoom)),
+                ("maxzoom", str(max_zoom)),
+                ("attribution", "AROME Weather Data - Météo-France"),
+                ("description", "AROME vertical velocity data with custom color gradient"),
+                ("type", "overlay"),
+                ("version", "1.0")
+            ]
+            cursor.executemany("INSERT OR REPLACE INTO metadata VALUES (?, ?)", metadata)
             
             # Now get tiles using WGS84 coordinates
             tiles_at_zoom = list(mercantile.tiles(west, south, east, north, zooms=[current_zoom]))
