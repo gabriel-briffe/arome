@@ -61,14 +61,14 @@ jobs:
       run: |
         echo "🗑️ Cleaning up releases older than 5 days..."
         
-        # Calculate cutoff date (5 days ago)
-        CUTOFF_DATE=$(date -d '5 days ago' --iso-8601)
-        echo "Cutoff date: $CUTOFF_DATE"
+        # Calculate cutoff timestamp (5 days ago as epoch seconds)
+        CUTOFF_EPOCH=$(date -d '5 days ago' +%s)
+        echo "Cutoff date: $(date -d '5 days ago' --iso-8601) (epoch: $CUTOFF_EPOCH)"
         
         # Get list of releases older than 5 days and delete them
         OLD_RELEASES=$(gh release list --limit 100 --json tagName,createdAt \
-          | jq -r --arg cutoff "$CUTOFF_DATE" \
-          '.[] | select(.createdAt < $cutoff) | .tagName')
+          | jq -r --arg cutoff "$CUTOFF_EPOCH" \
+          '.[] | select((.createdAt | fromdateiso8601) < ($cutoff | tonumber)) | .tagName')
         
         if [ -z "$OLD_RELEASES" ]; then
           echo "✅ No old releases to clean up"
