@@ -14,6 +14,8 @@ import sys
 import argparse
 import logging
 import traceback
+import json
+import subprocess
 from datetime import datetime, timezone, timedelta
 
 # Add parent directory to path
@@ -117,6 +119,28 @@ def upload_to_github_release(file_path, release_tag):
         print(f"Error uploading {file_path} to GitHub release: {e}")
         return False
 
+def check_file_exists_in_release(tag_name, filename):
+    """Check if a file already exists in the GitHub release"""
+    try:
+
+        cmd = ['gh', 'release', 'view', tag_name, '--json', 'assets']
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        release_data = json.loads(result.stdout)
+
+        existing_files = [asset['name'] for asset in release_data.get('assets', [])]
+        exists = filename in existing_files
+
+        if exists:
+            print(f"⏭️  File {filename} already exists in release, skipping...")
+
+        return exists
+    except subprocess.CalledProcessError as e:
+        print(f"⚠️  Could not check release assets: {e.stderr}")
+        return False
+    except Exception as e:
+        print(f"⚠️  Error checking release assets: {e}")
+        return False
+
 def download_wind_components(output_dir, forecast_days=[0, 1], log_level="INFO", release_tag=None):
     """Download U and V wind component data for the specified forecast days"""
     # Setup logging
@@ -170,14 +194,20 @@ def download_wind_components(output_dir, forecast_days=[0, 1], log_level="INFO",
                     time_value = f"{target_date_str}T{hour:02d}:00:00Z"
                     ref_time_value = f"{source_date_str}T00:00:00Z"
 
-                    # Process U component: Download → Validate → Upload
+                    # Process U component: Check → Download → Validate → Upload
                     u_filename = f"arome_u_{source_date_str}_{target_date_str}_{hour:02d}_{pressure}.tiff"
                     u_filepath = os.path.join(output_dir, u_filename)
 
                     logger.info(f"🔄 Processing U component: {u_filename}")
 
                     success_u = False
-                    if fetch_wind_component_tiff(
+
+                    # Check if file already exists in release
+                    if release_tag and check_file_exists_in_release(release_tag, u_filename):
+                        logger.info(f"⏭️  Skipping U component (already exists): {u_filename}")
+                        success_u = True
+                        successful_files += 1
+                    elif fetch_wind_component_tiff(
                         component_type='U',
                         time_value=time_value,
                         ref_time_value=ref_time_value,
@@ -201,14 +231,20 @@ def download_wind_components(output_dir, forecast_days=[0, 1], log_level="INFO",
                     if not success_u and os.path.exists(u_filepath):
                         os.remove(u_filepath)  # Clean up failed files
 
-                    # Process V component: Download → Validate → Upload
+                    # Process V component: Check → Download → Validate → Upload
                     v_filename = f"arome_v_{source_date_str}_{target_date_str}_{hour:02d}_{pressure}.tiff"
                     v_filepath = os.path.join(output_dir, v_filename)
 
                     logger.info(f"🔄 Processing V component: {v_filename}")
 
                     success_v = False
-                    if fetch_wind_component_tiff(
+
+                    # Check if file already exists in release
+                    if release_tag and check_file_exists_in_release(release_tag, v_filename):
+                        logger.info(f"⏭️  Skipping V component (already exists): {v_filename}")
+                        success_v = True
+                        successful_files += 1
+                    elif fetch_wind_component_tiff(
                         component_type='V',
                         time_value=time_value,
                         ref_time_value=ref_time_value,
