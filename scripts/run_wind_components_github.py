@@ -79,6 +79,44 @@ def is_valid_tiff(file_path):
         logger.warning(f"Error validating TIFF {file_path}: {e}")
         return False
 
+def upload_to_github_release(file_path, release_tag):
+    """Upload a single file to GitHub release"""
+    try:
+        import subprocess
+
+        filename = os.path.basename(file_path)
+
+        # Check if release exists, create if not
+        check_cmd = ["gh", "release", "view", release_tag]
+        result = subprocess.run(check_cmd, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            # Release doesn't exist, create it
+            logger.info(f"Creating GitHub release: {release_tag}")
+            create_cmd = [
+                "gh", "release", "create", release_tag,
+                "--title", f"AROME Data {release_tag.replace('arome-', '')}",
+                "--notes", "Daily AROME weather data including vertical velocity and wind components"
+            ]
+            create_result = subprocess.run(create_cmd, capture_output=True, text=True)
+            if create_result.returncode != 0:
+                logger.error(f"Failed to create release: {create_result.stderr}")
+                return False
+
+        # Upload the file
+        upload_cmd = ["gh", "release", "upload", release_tag, file_path]
+        upload_result = subprocess.run(upload_cmd, capture_output=True, text=True)
+
+        if upload_result.returncode == 0:
+            return True
+        else:
+            logger.error(f"Failed to upload {filename}: {upload_result.stderr}")
+            return False
+
+    except Exception as e:
+        logger.error(f"Error uploading {file_path} to GitHub release: {e}")
+        return False
+
 def download_wind_components(output_dir, forecast_days=[0, 1], log_level="INFO", release_tag=None):
     """Download U and V wind component data for the specified forecast days"""
     # Setup logging
@@ -102,7 +140,8 @@ def download_wind_components(output_dir, forecast_days=[0, 1], log_level="INFO",
 
         # Define pressure levels and hours (same as vertical velocity)
         pressure_levels = [500, 600, 700, 800, 900]
-        hours = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]  # 5-21 UTC
+        # hours = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]  # 5-21 UTC
+        hours = [5]  # 5-21 UTC
 
         total_files = len(forecast_days) * len(pressure_levels) * len(hours) * 2  # *2 for U and V
         successful_files = 0
@@ -132,11 +171,13 @@ def download_wind_components(output_dir, forecast_days=[0, 1], log_level="INFO",
                     time_value = f"{target_date_str}T{hour:02d}:00:00Z"
                     ref_time_value = f"{source_date_str}T00:00:00Z"
 
-                    # Download U component
+                    # Process U component: Download → Validate → Upload
                     u_filename = f"arome_u_{source_date_str}_{target_date_str}_{hour:02d}_{pressure}.tiff"
                     u_filepath = os.path.join(output_dir, u_filename)
 
-                    logger.debug(f"Downloading U component: {u_filename}")
+                    logger.info(f"🔄 Processing U component: {u_filename}")
+
+                    success_u = False
                     if fetch_wind_component_tiff(
                         component_type='U',
                         time_value=time_value,
@@ -145,20 +186,29 @@ def download_wind_components(output_dir, forecast_days=[0, 1], log_level="INFO",
                         output_file=u_filepath
                     ):
                         if is_valid_tiff(u_filepath):
-                            logger.info(f"✅ Downloaded valid U component: {u_filename}")
-                            successful_files += 1
+                            logger.info(f"✅ Downloaded and validated U component: {u_filename}")
+                            # Upload immediately to GitHub release
+                            if upload_to_github_release(u_filepath, release_tag):
+                                logger.info(f"📤 Successfully uploaded U component to release")
+                                success_u = True
+                                successful_files += 1
+                            else:
+                                logger.error(f"❌ Failed to upload U component to release")
                         else:
-                            logger.warning(f"❌ Downloaded file is not valid: {u_filename}")
-                            if os.path.exists(u_filepath):
-                                os.remove(u_filepath)
+                            logger.warning(f"❌ Downloaded U component is not valid: {u_filename}")
                     else:
                         logger.error(f"❌ Failed to download U component: {u_filename}")
 
-                    # Download V component
+                    if not success_u and os.path.exists(u_filepath):
+                        os.remove(u_filepath)  # Clean up failed files
+
+                    # Process V component: Download → Validate → Upload
                     v_filename = f"arome_v_{source_date_str}_{target_date_str}_{hour:02d}_{pressure}.tiff"
                     v_filepath = os.path.join(output_dir, v_filename)
 
-                    logger.debug(f"Downloading V component: {v_filename}")
+                    logger.info(f"🔄 Processing V component: {v_filename}")
+
+                    success_v = False
                     if fetch_wind_component_tiff(
                         component_type='V',
                         time_value=time_value,
@@ -167,20 +217,28 @@ def download_wind_components(output_dir, forecast_days=[0, 1], log_level="INFO",
                         output_file=v_filepath
                     ):
                         if is_valid_tiff(v_filepath):
-                            logger.info(f"✅ Downloaded valid V component: {v_filename}")
-                            successful_files += 1
+                            logger.info(f"✅ Downloaded and validated V component: {v_filename}")
+                            # Upload immediately to GitHub release
+                            if upload_to_github_release(v_filepath, release_tag):
+                                logger.info(f"📤 Successfully uploaded V component to release")
+                                success_v = True
+                                successful_files += 1
+                            else:
+                                logger.error(f"❌ Failed to upload V component to release")
                         else:
-                            logger.warning(f"❌ Downloaded file is not valid: {v_filename}")
-                            if os.path.exists(v_filepath):
-                                os.remove(v_filepath)
+                            logger.warning(f"❌ Downloaded V component is not valid: {v_filename}")
                     else:
                         logger.error(f"❌ Failed to download V component: {v_filename}")
+
+                    if not success_v and os.path.exists(v_filepath):
+                        os.remove(v_filepath)  # Clean up failed files
 
         # Report results
         logger.info(f"=== Wind components download completed ===")
         logger.info(f"Total files attempted: {total_files}")
-        logger.info(f"Successfully downloaded: {successful_files}")
+        logger.info(f"Successfully downloaded, validated, and uploaded: {successful_files}")
         logger.info(f"Failed: {total_files - successful_files}")
+        logger.info(f"Files uploaded to GitHub release: {release_tag}")
 
         if successful_files == total_files:
             return True

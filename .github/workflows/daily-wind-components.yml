@@ -63,63 +63,11 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Validate and filter downloaded files
+    - name: Create file list
+      if: always()
       run: |
-        echo "Validating downloaded wind component files..."
-        cd wind_components
-
-        # Count total files
-        total_files=$(ls -1 *.tiff 2>/dev/null | wc -l)
-        echo "Total TIFF files downloaded: $total_files"
-
-        # Check file sizes and validity
-        valid_files=0
-        invalid_files=0
-
-        for file in *.tiff; do
-          if [ -f "$file" ]; then
-            size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo "0")
-            if [ "$size" -gt 1000000 ]; then  # > 1MB
-              echo "✅ Valid: $file (${size} bytes)"
-              valid_files=$((valid_files + 1))
-            else
-              echo "❌ Invalid (too small): $file (${size} bytes)"
-              rm -f "$file"
-              invalid_files=$((invalid_files + 1))
-            fi
-          fi
-        done
-
-        echo "Valid files: $valid_files"
-        echo "Invalid files removed: $invalid_files"
-
-        # List final files
-        echo "Final files to upload:"
-        ls -la *.tiff
-
-    - name: Upload wind components to GitHub release
-      if: success()
-      run: |
-        echo "Uploading wind component files to release arome-${{ steps.date.outputs.date }}"
-
-        # Check if release exists, create if not
-        if ! gh release view "arome-${{ steps.date.outputs.date }}" >/dev/null 2>&1; then
-          echo "Creating new release arome-${{ steps.date.outputs.date }}"
-          gh release create "arome-${{ steps.date.outputs.date }}" \
-            --title "AROME Data ${{ steps.date.outputs.date }}" \
-            --notes "Daily AROME weather data including vertical velocity and wind components"
-        fi
-
-        # Upload all valid TIFF files
-        cd wind_components
-        for file in *.tiff; do
-          if [ -f "$file" ]; then
-            echo "Uploading $file..."
-            gh release upload "arome-${{ steps.date.outputs.date }}" "$file" || echo "Failed to upload $file"
-          fi
-        done
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        echo "Files in wind_components directory:"
+        ls -la wind_components/
 
     - name: Create file list
       if: always()
@@ -127,13 +75,6 @@ jobs:
         echo "Files in wind_components directory:"
         ls -la wind_components/
 
-    - name: Upload wind components as artifacts (backup)
-      if: success()
-      uses: actions/upload-artifact@v4
-      with:
-        name: wind-components-raw
-        path: wind_components/*.tiff
-        retention-days: 3  # Keep files for 3 days
 
     - name: Upload log files on failure
       if: failure()
