@@ -26,7 +26,7 @@ The repository includes GitHub Actions workflows that automatically process AROM
 
 ### Wind Components Download
 - **Workflow**: `.github/workflows/daily-wind-components.yml`
-- **Schedule**: Runs at 6:00 AM UTC daily
+- **Schedule**: Runs at 3:15 AM UTC daily
 - **Process**: Downloads raw U and V wind component TIFF files
 - **Release**: Adds raw TIFF files to the same daily release as vertical velocity data
 - **Validation**: Only uploads files that are valid TIFFs (>1MB, proper format)
