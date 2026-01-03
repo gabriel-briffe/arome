@@ -92,7 +92,7 @@ def upload_to_github_release(file_path, release_tag):
 
         if result.returncode != 0:
             # Release doesn't exist, create it
-            logger.info(f"Creating GitHub release: {release_tag}")
+            print(f"Creating GitHub release: {release_tag}")
             create_cmd = [
                 "gh", "release", "create", release_tag,
                 "--title", f"AROME Data {release_tag.replace('arome-', '')}",
@@ -100,7 +100,7 @@ def upload_to_github_release(file_path, release_tag):
             ]
             create_result = subprocess.run(create_cmd, capture_output=True, text=True)
             if create_result.returncode != 0:
-                logger.error(f"Failed to create release: {create_result.stderr}")
+                print(f"Failed to create release: {create_result.stderr}")
                 return False
 
         # Upload the file
@@ -110,11 +110,11 @@ def upload_to_github_release(file_path, release_tag):
         if upload_result.returncode == 0:
             return True
         else:
-            logger.error(f"Failed to upload {filename}: {upload_result.stderr}")
+            print(f"Failed to upload {filename}: {upload_result.stderr}")
             return False
 
     except Exception as e:
-        logger.error(f"Error uploading {file_path} to GitHub release: {e}")
+        print(f"Error uploading {file_path} to GitHub release: {e}")
         return False
 
 def download_wind_components(output_dir, forecast_days=[0, 1], log_level="INFO", release_tag=None):
