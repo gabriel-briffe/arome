@@ -1,0 +1,140 @@
+name: Daily AROME Wind Components Download
+
+on:
+  schedule:
+    # Run at 6:00 AM UTC daily
+    - cron: '0 6 * * *'
+  workflow_dispatch:  # Allow manual triggering
+
+# Add permissions section to allow creating releases
+permissions:
+  contents: write
+
+jobs:
+  download-wind-components:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'  # or the version you're using
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests==2.32.3
+
+    - name: Create output directory
+      run: |
+        mkdir -p wind_components
+
+    - name: List directory structure for debugging
+      run: |
+        pwd
+        echo "Current directory: $(pwd)"
+        echo "Contents of repository root:"
+        ls -la
+        echo "Contents of scripts directory:"
+        ls -la scripts/
+        echo "Python version:"
+        python --version
+        echo "Installed packages:"
+        pip list
+
+    # Get current date for release tag
+    - name: Get current date
+      id: date
+      run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+    - name: Download AROME wind components
+      run: |
+        cd scripts
+        python run_wind_components_github.py --output-dir $GITHUB_WORKSPACE/wind_components --forecast-days 0 1 --log-level INFO --release-tag arome-${{ steps.date.outputs.date }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Validate and filter downloaded files
+      run: |
+        echo "Validating downloaded wind component files..."
+        cd wind_components
+
+        # Count total files
+        total_files=$(ls -1 *.tiff 2>/dev/null | wc -l)
+        echo "Total TIFF files downloaded: $total_files"
+
+        # Check file sizes and validity
+        valid_files=0
+        invalid_files=0
+
+        for file in *.tiff; do
+          if [ -f "$file" ]; then
+            size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo "0")
+            if [ "$size" -gt 1000000 ]; then  # > 1MB
+              echo "✅ Valid: $file (${size} bytes)"
+              valid_files=$((valid_files + 1))
+            else
+              echo "❌ Invalid (too small): $file (${size} bytes)"
+              rm -f "$file"
+              invalid_files=$((invalid_files + 1))
+            fi
+          fi
+        done
+
+        echo "Valid files: $valid_files"
+        echo "Invalid files removed: $invalid_files"
+
+        # List final files
+        echo "Final files to upload:"
+        ls -la *.tiff
+
+    - name: Upload wind components to GitHub release
+      if: success()
+      run: |
+        echo "Uploading wind component files to release arome-${{ steps.date.outputs.date }}"
+
+        # Check if release exists, create if not
+        if ! gh release view "arome-${{ steps.date.outputs.date }}" >/dev/null 2>&1; then
+          echo "Creating new release arome-${{ steps.date.outputs.date }}"
+          gh release create "arome-${{ steps.date.outputs.date }}" \
+            --title "AROME Data ${{ steps.date.outputs.date }}" \
+            --notes "Daily AROME weather data including vertical velocity and wind components"
+        fi
+
+        # Upload all valid TIFF files
+        cd wind_components
+        for file in *.tiff; do
+          if [ -f "$file" ]; then
+            echo "Uploading $file..."
+            gh release upload "arome-${{ steps.date.outputs.date }}" "$file" || echo "Failed to upload $file"
+          fi
+        done
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create file list
+      if: always()
+      run: |
+        echo "Files in wind_components directory:"
+        ls -la wind_components/
+
+    - name: Upload wind components as artifacts (backup)
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: wind-components-raw
+        path: wind_components/*.tiff
+        retention-days: 3  # Keep files for 3 days
+
+    - name: Upload log files on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: wind-components-logs
+        path: |
+          *.log
+          scripts/*.log
+        retention-days: 1

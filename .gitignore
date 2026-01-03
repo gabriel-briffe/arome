@@ -17,6 +17,7 @@ arome/
 # Output data files
 output/
 test_output/
+devtest/
 *.tiff
 *.mbtiles
 
