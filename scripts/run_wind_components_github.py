@@ -14,7 +14,6 @@ import sys
 import argparse
 import logging
 import traceback
-import numpy as np
 from datetime import datetime, timezone, timedelta
 
 # Add parent directory to path
@@ -51,17 +50,29 @@ def is_valid_tiff(file_path):
         if os.path.getsize(file_path) < 1000000:  # Less than 1MB
             return False
 
-        # Try to open with rasterio
-        import rasterio
-        with rasterio.open(file_path) as src:
-            # Check if it has expected dimensions and data type
-            if src.width < 100 or src.height < 100:
+        # Check if file starts with TIFF header (II or MM)
+        with open(file_path, 'rb') as f:
+            header = f.read(4)
+            if header not in [b'II*\x00', b'MM\x00*']:  # Little-endian or big-endian TIFF
                 return False
-            # Check if it has valid data (not all zeros or nodata)
-            data = src.read(1)
-            valid_pixels = (~np.isnan(data) & (data != src.nodata)).sum()
-            if valid_pixels < 1000:  # Very few valid pixels
-                return False
+
+        # Try basic rasterio check (if available)
+        try:
+            import rasterio
+            import numpy as np
+            with rasterio.open(file_path) as src:
+                # Check if it has expected dimensions
+                if src.width < 100 or src.height < 100:
+                    return False
+                # Quick check for data
+                data = src.read(1, window=((0, 1), (0, 1)))  # Read just one pixel
+                if data.size == 0:
+                    return False
+        except ImportError:
+            # If rasterio not available, just check file header and size
+            pass
+        except Exception:
+            return False
 
         return True
     except Exception as e:
