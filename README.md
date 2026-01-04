@@ -27,8 +27,10 @@ The repository includes GitHub Actions workflows that automatically process AROM
 ### Wind Components Download
 - **Workflow**: `.github/workflows/daily-wind-components.yml`
 - **Schedule**: Runs at 3:15 AM UTC daily
-- **Process**: Downloads raw U and V wind component TIFF files
-- **Release**: Adds raw TIFF files to the same daily release as vertical velocity data
+- **Process**: Downloads raw U and V wind component TIFF files and splits them into 4 geographic regions
+- **Release**: Adds split regional TIFF files to the same daily release as vertical velocity data
+- **Regions**: South (37.5-41°N), MiddleWest (41-48.5°N west of 4°E), MiddleEast (41-48.5°N east of 4°E), North (48.5-55.4°N)
+- **Resumable**: Checks each split file individually and skips uploads if files already exist
 - **Validation**: Only uploads files that are valid TIFFs (>1MB, proper format)
 
 ## File Naming Convention
@@ -40,8 +42,16 @@ arome_vv_{source_date}_{target_date}_{hour}_{pressure}.mbtiles
 
 ### Raw Wind Component Files (TIFF)
 ```
-arome_u_{source_date}_{target_date}_{hour}_{pressure}.tiff  # U component (eastward)
-arome_v_{source_date}_{target_date}_{hour}_{pressure}.tiff  # V component (northward)
+# Regional split files (4 regions per component):
+arome_u_South_{source_date}_{target_date}_{hour}_{pressure}.tiff      # South region (37.5-41°N)
+arome_u_MiddleWest_{source_date}_{target_date}_{hour}_{pressure}.tiff # Middle West (41-48.5°N, <4°E)
+arome_u_MiddleEast_{source_date}_{target_date}_{hour}_{pressure}.tiff # Middle East (41-48.5°N, >4°E)
+arome_u_North_{source_date}_{target_date}_{hour}_{pressure}.tiff      # North region (48.5-55.4°N)
+
+arome_v_South_{source_date}_{target_date}_{hour}_{pressure}.tiff      # V component, South region
+arome_v_MiddleWest_{source_date}_{target_date}_{hour}_{pressure}.tiff # V component, Middle West
+arome_v_MiddleEast_{source_date}_{target_date}_{hour}_{pressure}.tiff # V component, Middle East
+arome_v_North_{source_date}_{target_date}_{hour}_{pressure}.tiff      # V component, North region
 ```
 
 Where:

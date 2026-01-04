@@ -3,7 +3,18 @@
 GitHub Actions Runner Script for AROME Wind Components Data Download
 
 This script downloads U and V wind component data using the same mechanism
-as the vertical velocity processing, but saves the raw TIFF files.
+as the vertical velocity processing, splits each component into 4 geographic
+regions (South, MiddleWest, MiddleEast, North), and uploads the split files
+to GitHub releases with regional naming convention.
+
+The script checks each individual split file before uploading and skips files
+that already exist in the release, allowing for resumable uploads.
+
+Regions:
+- South: 37.5°N to 41°N (full longitude)
+- MiddleWest: 41°N to 48.5°N, west of 4°E
+- MiddleEast: 41°N to 48.5°N, east of 4°E
+- North: 48.5°N to 55.4°N (full longitude)
 
 Usage:
   python run_wind_components_github.py --output-dir /path/to/output --log-level INFO
@@ -17,6 +28,9 @@ import traceback
 import json
 import subprocess
 from datetime import datetime, timezone, timedelta
+import rasterio
+from rasterio.windows import from_bounds
+import numpy as np
 
 # Add parent directory to path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -141,6 +155,115 @@ def check_file_exists_in_release(tag_name, filename):
         print(f"⚠️  Error checking release assets: {e}")
         return False
 
+def split_wind_component_tiff(input_file, output_dir, source_date_str, target_date_str, hour, pressure, component_type):
+    """
+    Split a wind component TIFF into 4 regions and save with new naming convention
+
+    Parameters:
+    ----------
+    input_file : str
+        Path to input TIFF file
+    output_dir : str
+        Directory to save split files
+    source_date_str, target_date_str : str
+        Date strings for naming
+    hour : int
+        Forecast hour
+    pressure : int
+        Pressure level
+    component_type : str
+        'U' or 'V' component
+
+    Returns:
+    -------
+    list : Paths to the 4 split files created
+    """
+
+    split_files = []
+
+    with rasterio.open(input_file) as src:
+        # Get source bounds
+        bounds = src.bounds
+        left, bottom, right, top = bounds
+
+        # Define the regions with names matching the desired output
+        regions = [
+            {
+                'name': 'South',
+                'bounds': (left, bottom, right, 41.0),
+                'description': f'{bottom:.1f}°N to 41.0°N'
+            },
+            {
+                'name': 'MiddleWest',
+                'bounds': (left, 41.0, 4.0, 48.5),
+                'description': f'41.0°N to 48.5°N, {left:.1f}°E to 4.0°E'
+            },
+            {
+                'name': 'MiddleEast',
+                'bounds': (4.0, 41.0, right, 48.5),
+                'description': f'41.0°N to 48.5°N, 4.0°E to {right:.1f}°E'
+            },
+            {
+                'name': 'North',
+                'bounds': (left, 48.5, right, top),
+                'description': f'48.5°N to {top:.1f}°N'
+            }
+        ]
+
+        for region in regions:
+            name = region['name']
+            region_bounds = region['bounds']
+            description = region['description']
+
+            region_left, region_bottom, region_right, region_top = region_bounds
+
+            # Skip if region has no height or width
+            if region_top <= region_bottom or region_right <= region_left:
+                continue
+
+            try:
+                # Create window for this region
+                window = rasterio.windows.from_bounds(
+                    region_left, region_bottom, region_right, region_top,
+                    src.transform
+                )
+
+                # Read the data
+                region_data = src.read(window=window)
+
+                # Skip if no data
+                if region_data.size == 0:
+                    continue
+
+                # Create new transform for this region
+                region_transform = rasterio.transform.from_bounds(
+                    region_left, region_bottom, region_right, region_top,
+                    region_data.shape[2], region_data.shape[1]  # width, height
+                )
+
+                # Create output filename with new naming convention
+                output_filename = f"arome_{component_type.lower()}_{name}_{source_date_str}_{target_date_str}_{hour:02d}_{pressure}.tiff"
+                output_path = os.path.join(output_dir, output_filename)
+
+                # Create profile for output
+                region_profile = src.profile.copy()
+                region_profile.update({
+                    'height': region_data.shape[1],
+                    'width': region_data.shape[2],
+                    'transform': region_transform
+                })
+
+                # Write the region
+                with rasterio.open(output_path, 'w', **region_profile) as dst:
+                    dst.write(region_data)
+
+                split_files.append(output_path)
+
+            except Exception as e:
+                print(f"❌ Error processing {name} region: {e}")
+
+    return split_files
+
 def download_wind_components(output_dir, forecast_days=[0, 1], log_level="INFO", release_tag=None):
     """Download U and V wind component data for the specified forecast days"""
     # Setup logging
@@ -166,7 +289,9 @@ def download_wind_components(output_dir, forecast_days=[0, 1], log_level="INFO",
         pressure_levels = [500, 600, 700, 800, 900]
         hours = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]  # 5-21 UTC
 
-        total_files = len(forecast_days) * len(pressure_levels) * len(hours) * 2  # *2 for U and V
+        # Each component is split into 4 regions, so total files = forecast_days * pressures * hours * components * regions
+        # Note: actual uploaded files may be less due to existing files being skipped
+        total_files = len(forecast_days) * len(pressure_levels) * len(hours) * 2 * 4  # *2 for U/V, *4 for regions
         successful_files = 0
 
         logger.info(f"=== Starting wind components download: {total_files} files ===")
@@ -194,86 +319,150 @@ def download_wind_components(output_dir, forecast_days=[0, 1], log_level="INFO",
                     time_value = f"{target_date_str}T{hour:02d}:00:00Z"
                     ref_time_value = f"{source_date_str}T00:00:00Z"
 
-                    # Process U component: Check → Download → Validate → Upload
-                    u_filename = f"arome_u_{source_date_str}_{target_date_str}_{hour:02d}_{pressure}.tiff"
-                    u_filepath = os.path.join(output_dir, u_filename)
+                    # Process U component: Download → Validate → Split → Check each split → Upload missing splits
+                    u_base_filename = f"arome_u_{source_date_str}_{target_date_str}_{hour:02d}_{pressure}.tiff"
+                    u_filepath = os.path.join(output_dir, u_base_filename)
 
-                    logger.info(f"🔄 Processing U component: {u_filename}")
+                    logger.info(f"🔄 Processing U component: {u_base_filename}")
 
                     success_u = False
+                    uploaded_u_splits = 0
 
-                    # Check if file already exists in release
-                    if release_tag and check_file_exists_in_release(release_tag, u_filename):
-                        logger.info(f"⏭️  Skipping U component (already exists): {u_filename}")
-                        success_u = True
-                        successful_files += 1
-                    elif fetch_wind_component_tiff(
-                        component_type='U',
-                        time_value=time_value,
-                        ref_time_value=ref_time_value,
-                        pressure_value=str(pressure),
-                        output_file=u_filepath
-                    ):
-                        if is_valid_tiff(u_filepath):
-                            logger.info(f"✅ Downloaded and validated U component: {u_filename}")
-                            # Upload immediately to GitHub release
-                            if upload_to_github_release(u_filepath, release_tag):
-                                logger.info(f"📤 Successfully uploaded U component to release")
-                                success_u = True
-                                successful_files += 1
-                            else:
-                                logger.error(f"❌ Failed to upload U component to release")
+                    # Check if raw file already exists locally (skip download if it does)
+                    if not os.path.exists(u_filepath):
+                        if not fetch_wind_component_tiff(
+                            component_type='U',
+                            time_value=time_value,
+                            ref_time_value=ref_time_value,
+                            pressure_value=str(pressure),
+                            output_file=u_filepath
+                        ):
+                            logger.error(f"❌ Failed to download U component: {u_base_filename}")
+                        elif not is_valid_tiff(u_filepath):
+                            logger.warning(f"❌ Downloaded U component is not valid: {u_base_filename}")
                         else:
-                            logger.warning(f"❌ Downloaded U component is not valid: {u_filename}")
+                            logger.info(f"✅ Downloaded and validated U component: {u_base_filename}")
                     else:
-                        logger.error(f"❌ Failed to download U component: {u_filename}")
+                        logger.info(f"⏭️  U component already exists locally: {u_base_filename}")
 
-                    if not success_u and os.path.exists(u_filepath):
-                        os.remove(u_filepath)  # Clean up failed files
+                    # If we have a valid U file, split it
+                    if os.path.exists(u_filepath) and is_valid_tiff(u_filepath):
+                        split_files = split_wind_component_tiff(
+                            u_filepath, output_dir, source_date_str, target_date_str, hour, pressure, 'U'
+                        )
 
-                    # Process V component: Check → Download → Validate → Upload
-                    v_filename = f"arome_v_{source_date_str}_{target_date_str}_{hour:02d}_{pressure}.tiff"
-                    v_filepath = os.path.join(output_dir, v_filename)
+                        if len(split_files) == 4:
+                            logger.info(f"✅ Split U component into 4 regions")
 
-                    logger.info(f"🔄 Processing V component: {v_filename}")
+                            # Check and upload each split file individually
+                            for split_file in split_files:
+                                split_filename = os.path.basename(split_file)
+
+                                if release_tag and check_file_exists_in_release(release_tag, split_filename):
+                                    logger.info(f"⏭️  U split already exists in release: {split_filename}")
+                                    uploaded_u_splits += 1  # Count as successful even if skipped
+                                elif upload_to_github_release(split_file, release_tag):
+                                    logger.info(f"📤 Successfully uploaded U split: {split_filename}")
+                                    uploaded_u_splits += 1
+                                else:
+                                    logger.error(f"❌ Failed to upload U split: {split_filename}")
+
+                            if uploaded_u_splits == 4:
+                                success_u = True
+                                successful_files += 4
+
+                            # Clean up split files after upload attempts
+                            for split_file in split_files:
+                                try:
+                                    os.remove(split_file)
+                                except OSError:
+                                    pass  # Ignore cleanup errors
+
+                        else:
+                            logger.error(f"❌ Failed to split U component into 4 regions (got {len(split_files)})")
+
+                    # Clean up original file after splitting
+                    if os.path.exists(u_filepath):
+                        try:
+                            os.remove(u_filepath)
+                        except OSError:
+                            pass  # Ignore cleanup errors
+
+                    # Process V component: Download → Validate → Split → Check each split → Upload missing splits
+                    v_base_filename = f"arome_v_{source_date_str}_{target_date_str}_{hour:02d}_{pressure}.tiff"
+                    v_filepath = os.path.join(output_dir, v_base_filename)
+
+                    logger.info(f"🔄 Processing V component: {v_base_filename}")
 
                     success_v = False
+                    uploaded_v_splits = 0
 
-                    # Check if file already exists in release
-                    if release_tag and check_file_exists_in_release(release_tag, v_filename):
-                        logger.info(f"⏭️  Skipping V component (already exists): {v_filename}")
-                        success_v = True
-                        successful_files += 1
-                    elif fetch_wind_component_tiff(
-                        component_type='V',
-                        time_value=time_value,
-                        ref_time_value=ref_time_value,
-                        pressure_value=str(pressure),
-                        output_file=v_filepath
-                    ):
-                        if is_valid_tiff(v_filepath):
-                            logger.info(f"✅ Downloaded and validated V component: {v_filename}")
-                            # Upload immediately to GitHub release
-                            if upload_to_github_release(v_filepath, release_tag):
-                                logger.info(f"📤 Successfully uploaded V component to release")
-                                success_v = True
-                                successful_files += 1
-                            else:
-                                logger.error(f"❌ Failed to upload V component to release")
+                    # Check if raw file already exists locally (skip download if it does)
+                    if not os.path.exists(v_filepath):
+                        if not fetch_wind_component_tiff(
+                            component_type='V',
+                            time_value=time_value,
+                            ref_time_value=ref_time_value,
+                            pressure_value=str(pressure),
+                            output_file=v_filepath
+                        ):
+                            logger.error(f"❌ Failed to download V component: {v_base_filename}")
+                        elif not is_valid_tiff(v_filepath):
+                            logger.warning(f"❌ Downloaded V component is not valid: {v_base_filename}")
                         else:
-                            logger.warning(f"❌ Downloaded V component is not valid: {v_filename}")
+                            logger.info(f"✅ Downloaded and validated V component: {v_base_filename}")
                     else:
-                        logger.error(f"❌ Failed to download V component: {v_filename}")
+                        logger.info(f"⏭️  V component already exists locally: {v_base_filename}")
 
-                    if not success_v and os.path.exists(v_filepath):
-                        os.remove(v_filepath)  # Clean up failed files
+                    # If we have a valid V file, split it
+                    if os.path.exists(v_filepath) and is_valid_tiff(v_filepath):
+                        split_files = split_wind_component_tiff(
+                            v_filepath, output_dir, source_date_str, target_date_str, hour, pressure, 'V'
+                        )
+
+                        if len(split_files) == 4:
+                            logger.info(f"✅ Split V component into 4 regions")
+
+                            # Check and upload each split file individually
+                            for split_file in split_files:
+                                split_filename = os.path.basename(split_file)
+
+                                if release_tag and check_file_exists_in_release(release_tag, split_filename):
+                                    logger.info(f"⏭️  V split already exists in release: {split_filename}")
+                                    uploaded_v_splits += 1  # Count as successful even if skipped
+                                elif upload_to_github_release(split_file, release_tag):
+                                    logger.info(f"📤 Successfully uploaded V split: {split_filename}")
+                                    uploaded_v_splits += 1
+                                else:
+                                    logger.error(f"❌ Failed to upload V split: {split_filename}")
+
+                            if uploaded_v_splits == 4:
+                                success_v = True
+                                successful_files += 4
+
+                            # Clean up split files after upload attempts
+                            for split_file in split_files:
+                                try:
+                                    os.remove(split_file)
+                                except OSError:
+                                    pass  # Ignore cleanup errors
+
+                        else:
+                            logger.error(f"❌ Failed to split V component into 4 regions (got {len(split_files)})")
+
+                    # Clean up original file after splitting
+                    if os.path.exists(v_filepath):
+                        try:
+                            os.remove(v_filepath)
+                        except OSError:
+                            pass  # Ignore cleanup errors
 
         # Report results
         logger.info(f"=== Wind components download completed ===")
-        logger.info(f"Total files attempted: {total_files}")
-        logger.info(f"Successfully downloaded, validated, and uploaded: {successful_files}")
-        logger.info(f"Failed: {total_files - successful_files}")
-        logger.info(f"Files uploaded to GitHub release: {release_tag}")
+        logger.info(f"Total split files that could be processed: {total_files}")
+        logger.info(f"Successfully processed and available in release: {successful_files}")
+        logger.info(f"Files may have been skipped if they already existed in release: {release_tag}")
+        logger.info(f"Note: Each original component is split into 4 regional files")
 
         if successful_files == total_files:
             return True
@@ -290,7 +479,7 @@ def download_wind_components(output_dir, forecast_days=[0, 1], log_level="INFO",
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="GitHub Actions Runner for AROME Wind Components Download",
+        description="GitHub Actions Runner for AROME Wind Components Download (with regional splitting)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
