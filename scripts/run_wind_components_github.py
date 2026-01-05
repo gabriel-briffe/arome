@@ -485,7 +485,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--output-dir", default="./output",
                         help="Directory to save output files")
-    parser.add_argument("--forecast-days", type=int, nargs="+", default=[0, 1],
+    parser.add_argument("--forecast-days", type=int, nargs="+", default=[0],
                         help="Days to forecast (0 for today, 1 for tomorrow, etc.)")
     parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
                         help="Set the logging level")

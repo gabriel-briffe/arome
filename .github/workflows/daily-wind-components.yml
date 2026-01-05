@@ -59,7 +59,7 @@ jobs:
     - name: Download AROME wind components
       run: |
         cd scripts
-        python run_wind_components_github.py --output-dir $GITHUB_WORKSPACE/wind_components --forecast-days 0 1 --log-level INFO --release-tag arome-${{ steps.date.outputs.date }}
+        python run_wind_components_github.py --output-dir $GITHUB_WORKSPACE/wind_components --forecast-days 0 --log-level INFO --release-tag arome-${{ steps.date.outputs.date }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

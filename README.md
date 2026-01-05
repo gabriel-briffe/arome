@@ -27,7 +27,7 @@ The repository includes GitHub Actions workflows that automatically process AROM
 ### Wind Components Download
 - **Workflow**: `.github/workflows/daily-wind-components.yml`
 - **Schedule**: Runs at 3:15 AM UTC daily
-- **Process**: Downloads raw U and V wind component TIFF files and splits them into 4 geographic regions
+- **Process**: Downloads raw U and V wind component TIFF files for today only and splits them into 4 geographic regions
 - **Release**: Adds split regional TIFF files to the same daily release as vertical velocity data
 - **Regions**: South (37.5-41°N), MiddleWest (41-48.5°N west of 4°E), MiddleEast (41-48.5°N east of 4°E), North (48.5-55.4°N)
 - **Resumable**: Checks each split file individually and skips uploads if files already exist
