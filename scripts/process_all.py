@@ -3,7 +3,7 @@
 AROME Data Processing Pipeline - All Files
 
 This script processes multiple AROME data files in batch, with support for:
-- Multiple pressure levels (500-900 hPa)
+- Multiple pressure levels (500-1000 hPa)
 - Multiple hours (5-21 UTC)
 - Multiple forecast days
 - Parallel processing
@@ -305,7 +305,7 @@ def process_all(output_dir, min_zoom=4, max_zoom=8, parallel=2, skip_existing=Tr
     
     # Define ranges
     hours = range(5, 20)  # 5 to 21 inclusive
-    pressure_levels = [500, 600, 700, 800, 900]
+    pressure_levels = [500, 600, 700, 800, 900, 1000]
     
     # Create tasks list for each forecast day
     tasks = []

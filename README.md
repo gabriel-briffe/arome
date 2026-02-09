@@ -62,7 +62,7 @@ Where:
 
 ## Data Parameters
 
-- **Pressure Levels**: 500, 600, 700, 800, 900 hPa
+- **Pressure Levels**: 500, 600, 700, 800, 900, 1000 hPa
 - **Forecast Hours**: 05:00 to 21:00 UTC
 - **Forecast Days**: Today (day 0) and tomorrow (day 1)
 - **Total Files per Day**: ~340 processed files + ~340 raw wind component files

@@ -286,7 +286,7 @@ def download_wind_components(output_dir, forecast_days=[0, 1], log_level="INFO",
         os.makedirs(output_dir, exist_ok=True)
 
         # Define pressure levels and hours (same as vertical velocity)
-        pressure_levels = [500, 600, 700, 800, 900]
+        pressure_levels = [500, 600, 700, 800, 900, 1000]
         hours = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]  # 5-21 UTC
 
         # Each component is split into 4 regions, so total files = forecast_days * pressures * hours * components * regions
